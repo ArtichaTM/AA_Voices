@@ -8,11 +8,12 @@ from classes import Downloader, ServantVoices
 def setUpLogger(level: int = logging.DEBUG) -> None:
     logger = logging.getLogger('AA_voices_downloader')
     logger.setLevel(level=level)
+    logging.basicConfig(filename='log.txt', level=logging.DEBUG)
 
 
 async def main():
     setUpLogger()
-    downloader =  Downloader(delay=2, timeout=30)
+    downloader =  Downloader(delay=5, timeout=30)
     try:
         await downloader.updateInfo()
         voices = await ServantVoices.load(121)

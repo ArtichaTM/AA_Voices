@@ -1,7 +1,7 @@
 from typing import Any, Generator, Optional
 import asyncio
+from logging import getLogger
 import subprocess
-import logging
 from enum import IntEnum
 from time import time
 from json import loads
@@ -18,6 +18,8 @@ __all__ = (
     'ServantVoices',
     'MAINDIR'
 )
+
+logger = getLogger('AA_voices_downloader')
 
 """
 Analog to code below:
@@ -112,6 +114,7 @@ class Downloader:
 
         self.last_request = time() + self.timeout
         async with self.session.get(self.API_SERVER + address, params=params, allow_redirects=False) as response:
+            logger.debug(f'Successfully got {address} with {params} by request')
             self.last_request = time()
             return loads(await response.text())
 
@@ -131,6 +134,7 @@ class Downloader:
         else:
             url = self.API_SERVER + address
         async with self.session.get(url, allow_redirects=False, params=params) as response:
+            logger.debug(f'Successfully downloaded {address} with {params}')
             self.last_request = time()
             save_path.parent.mkdir(parents=True, exist_ok=True)
             with save_path.open('wb+') as f: 
@@ -172,17 +176,17 @@ class VoiceLine:
     @property
     def name(self) -> str:
         if self.dictionary['overwriteName']:
-            return self.dictionary['overwriteName']
-        return self.dictionary['name']
+            return self.overwriteName
+        return self.dictionary['name'].strip()
 
     @property
     def overwriteName(self) -> str:
-        return self.dictionary['overwriteName']
+        return self.dictionary['overwriteName'].strip()
 
     @property
     def anyName(self) -> str:
         string = self.overwriteName if self.overwriteName else self.name
-        return string.replace('{', '').replace('}', '')
+        return string.replace('{', '').replace('}', '').strip()
 
     @property
     def downloaded(self) -> bool:
@@ -362,6 +366,7 @@ class ServantVoices:
             current_json = loads(self.path_json.read_text(encoding='utf-8'))
             new_json = await self.get_json(self.id)
             if current_json != new_json:
+                logger.info(f'JSON for Servant {self.id} has been updated. Updating voices')
                 self.path_voices.unlink(missing_ok=True)
         if bar is not None:
             voice_lines_amount = self.count_all_voice_lines()
