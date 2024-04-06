@@ -1,6 +1,7 @@
 from typing import Any, Generator, Optional
 import asyncio
 import subprocess
+import logging
 from enum import IntEnum
 from time import time
 from json import loads
@@ -8,7 +9,7 @@ from pathlib import Path
 from functools import cached_property
 
 from aiohttp import ClientSession
-
+from progress.bar import Bar
 
 __all__ = (
     'Ascension',
@@ -18,6 +19,8 @@ __all__ = (
     'MAINDIR'
 )
 
+"""
+Analog to code below:
 
 class Ascension(IntEnum):
     Asc0 = 0
@@ -25,14 +28,20 @@ class Ascension(IntEnum):
     Asc2 = 2
     Asc3 = 3
     Asc4 = 4
-    Costume1 = 5
-    Costume2 = 6
-    Costume3 = 7
-    Costume4 = 8
-    Costume5 = 9
-    Costume6 = 10
-    Costume7 = 11
-    Costume8 = 12
+    Costume0 = 5
+    Costume1 = 6
+    ...
+    Costume19 = 24
+"""
+Ascension = IntEnum('Ascension', dict(
+    list({
+        f"Asc{i}": i for i in range(5)
+    }.items())
+    +
+    list({
+        f"Costume{i}": i+5 for i in range(20)
+    }.items())
+))
 
 
 class VoiceLineCategory(IntEnum):
@@ -138,14 +147,12 @@ class VoiceLine:
         '__dict__', 'dictionary'
     )
     dictionary: dict[str, Any]
-    loaded: bool
 
     def __init__(self, values: dict[str, Any]) -> None:
         assert isinstance(values, dict)
         assert 'svt_id' in values, \
             "Servant id (svt_id) should be added in dictionary passed to VoiceLine"
         self.dictionary = values
-        self.loaded = False
 
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
@@ -174,7 +181,8 @@ class VoiceLine:
 
     @property
     def anyName(self) -> str:
-        return self.overwriteName if self.overwriteName else self.name
+        string = self.overwriteName if self.overwriteName else self.name
+        return string.replace('{', '').replace('}', '')
 
     @property
     def downloaded(self) -> bool:
@@ -192,6 +200,10 @@ class VoiceLine:
     @property
     def path(self) -> Path:
         return self.path_folder / self.filename
+
+    @property
+    def loaded(self) -> bool:
+        return self.path.exists()
 
     def voiceLinesURL(self) -> Generator[str, None, None]:
         yield from self.dictionary['audioAssets']
@@ -236,7 +248,6 @@ class VoiceLine:
             for source in source_paths:
                 source.unlink()
 
-
     async def download(self) -> None:
         downloader = Downloader()
         paths: list[Path] = []
@@ -250,19 +261,37 @@ ANNOTATION_VOICE_CATEGORY = dict[VoiceLineCategory, dict[str, list[VoiceLine]]]
 ANNOTATION_VOICES = dict[Ascension, ANNOTATION_VOICE_CATEGORY]
 class ServantVoices:
     __slots__ = (
-        'id', 'voice_lines', 'path'
+        'id', 'voice_lines',
     )
     id: int
     voice_lines: ANNOTATION_VOICES
-    path: Path
 
     def __init__(self, id: int):
         self.id = id
         self.voice_lines = dict()
-        self.path = Downloader.SERVANTS_FOLDER / str(id)
 
     def __repr__(self) -> str:
         return f"<Svt {self.id}" + (' with voice lines' if self.voice_lines else '') + '>'
+
+    @property
+    def path(self) -> Path:
+        return Downloader.SERVANTS_FOLDER / str(self.id)
+
+    @property
+    def path_json(self) -> Path:
+        return self.path / 'info.json'
+
+    @property
+    def path_voices(self) -> Path:
+        return self.path / 'voices'
+
+    @classmethod
+    async def get_json(cls, id: int) -> dict:
+        return await Downloader().request(
+                address=f'/nice/NA/servant/{id}',
+                params={'lore': 'true'}
+            )
+
 
     @classmethod
     async def _updateJSON(cls, id: int) -> None:
@@ -286,15 +315,12 @@ class ServantVoices:
             # JSON doesn't exist
             if not servant_json_path.exists():
                 await cls._updateJSON(id=id)
-            # Old JSON
-            elif servant_json_path.lstat().st_mtime < Downloader().timestamps['NA']:
-                await cls._updateJSON(id=id)
             break
 
         return ServantVoices(id=id)
 
     async def buildVoiceLinesDict(self, fill_all_ascensions: bool = False) -> None:
-        data: dict = loads((self.path / 'info.json').read_text(encoding='utf-8'))
+        data: dict = loads(self.path_json.read_text(encoding='utf-8'))
         output: ANNOTATION_VOICES = dict()
         for voices in data['profile']['voices']:
             type = VoiceLineCategory.fromString(voices['type'])
@@ -320,8 +346,28 @@ class ServantVoices:
 
         self.voice_lines = output
 
-    async def updateVoices(self) -> None:
-        folder_voices = Downloader.SERVANTS_FOLDER / str(self.id) / Downloader.VOICES_FOLDER_NAME
+    def count_all_voice_lines(self) -> int:
+        counter = 0
+        for ascension_values in self.voice_lines.values():
+            for category_values in ascension_values.values():
+                for type_values in category_values.values():
+                    counter += len(type_values)
+        return counter
+
+
+    async def updateVoices(self, bar: Bar | None = None) -> None:
+        if not self.path_json.exists():
+            pass
+        elif Downloader().timestamps['NA'] > self.path.lstat().st_mtime:
+            current_json = loads(self.path_json.read_text(encoding='utf-8'))
+            new_json = await self.get_json(self.id)
+            if current_json != new_json:
+                self.path_voices.unlink(missing_ok=True)
+        if bar is not None:
+            voice_lines_amount = self.count_all_voice_lines()
+            bar.max = voice_lines_amount
+            bar.message = '.'.rjust(25)
+        folder_voices = self.path / Downloader.VOICES_FOLDER_NAME
         folder_voices.mkdir(exist_ok=True)
         for ascension, ascension_values in self.voice_lines.items():
             folder_ascension = folder_voices / ascension.name
@@ -333,4 +379,9 @@ class ServantVoices:
                     folder_type = folder_category / type
                     folder_type.mkdir(exist_ok=True)
                     for voice_line in type_values:
+                        if bar is not None:
+                            bar.next()
+                            bar.message = f"{ascension.name}: {voice_line.anyName}"[:25] + '.'
+                        if voice_line.loaded:
+                            continue
                         await voice_line.download()
