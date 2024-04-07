@@ -125,7 +125,7 @@ class Downloader:
         assert isinstance(params, dict) or params is None
 
         if params is None: params = dict()
-        while (time() - self.last_request) > self.delay:
+        while (time() - self.last_request) < self.delay:
             await asyncio.sleep(time() - self.last_request)
 
         self.last_request = time() + self.timeout
