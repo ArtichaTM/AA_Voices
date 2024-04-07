@@ -53,6 +53,7 @@ class VoiceLineCategory(IntEnum):
     Batlle = 3
     TreasureDevice = 4
     EventReward = 5
+    MasterMission = 6
 
     @classmethod
     def fromString(cls, value: str) -> 'VoiceLineCategory':
@@ -69,6 +70,8 @@ class VoiceLineCategory(IntEnum):
                 return cls.TreasureDevice
             case 'eventReward':
                 return cls.EventReward
+            case 'masterMission':
+                return cls.MasterMission
             case _:
                 raise Exception(f"There's no such category: \"{value}\"")
 
@@ -186,7 +189,7 @@ class VoiceLine:
     @property
     def anyName(self) -> str:
         string = self.overwriteName if self.overwriteName else self.name
-        return string.replace('{', '').replace('}', '').strip()
+        return string.replace('{', '').replace('}', '').replace(':', ' -').strip()
 
     @property
     def downloaded(self) -> bool:
@@ -195,7 +198,7 @@ class VoiceLine:
     @property
     def path_folder(self) -> Path:
         return Downloader.SERVANTS_FOLDER / str(self.servant_id) / Downloader.VOICES_FOLDER_NAME / \
-            self.ascension.name / self.type.name / self.name
+            self.ascension.name / self.type.name / self.anyName
 
     @property
     def filename(self) -> str:
@@ -334,7 +337,7 @@ class ServantVoices:
             if type not in output[ascension]:
                 output[ascension][type] = dict()
             for line in voices['voiceLines']:
-                name = line['name']
+                name = line['name'].replace(':', ' -')
                 if name not in output[ascension][type]:
                     output[ascension][type][name] = []
                 line['svt_id'] = self.id
@@ -359,19 +362,23 @@ class ServantVoices:
         return counter
 
 
-    async def updateVoices(self, bar: Bar | None = None) -> None:
+    async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
+        logger.info(f'Requested update for servant {self.id}')
         if not self.path_json.exists():
-            pass
+            logger.info(f"S{self.id}: JSON doesn't exist, but must exist")
         elif Downloader().timestamps['NA'] > self.path.lstat().st_mtime:
+            logger.info(f'S{self.id}: folder modified before NA patch')
             current_json = loads(self.path_json.read_text(encoding='utf-8'))
             new_json = await self.get_json(self.id)
             if current_json != new_json:
-                logger.info(f'JSON for Servant {self.id} has been updated. Updating voices')
+                logger.info(f'S{self.id}: New JSON different from old')
                 self.path_voices.unlink(missing_ok=True)
+        logger.info(f'Started updating {self.id} voices')
         if bar is not None:
             voice_lines_amount = self.count_all_voice_lines()
             bar.max = voice_lines_amount
-            bar.message = '.'.rjust(25)
+            bar.message = '.'.rjust(message_size)
+            bar.update()
         folder_voices = self.path / Downloader.VOICES_FOLDER_NAME
         folder_voices.mkdir(exist_ok=True)
         for ascension, ascension_values in self.voice_lines.items():
@@ -386,7 +393,11 @@ class ServantVoices:
                     for voice_line in type_values:
                         if bar is not None:
                             bar.next()
-                            bar.message = f"{ascension.name}: {voice_line.anyName}"[:25] + '.'
+                            bar.message = f"{ascension.name}: {voice_line.anyName}"[:message_size] + '.'
                         if voice_line.loaded:
                             continue
                         await voice_line.download()
+        if bar is not None:
+            bar.message = f'Servant {self.id} updated'
+            bar.update()
+            bar.finish()
