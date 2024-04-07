@@ -8,7 +8,11 @@ from classes import Downloader, ServantVoices
 def setUpLogger(level: int = logging.DEBUG) -> logging.Logger:
     logger = logging.getLogger('AA_voices_downloader')
     logger.setLevel(level=level)
-    logging.basicConfig(filename='log.txt', level=logging.DEBUG)
+    logging.basicConfig(
+        filename='log.txt',
+        level=logging.DEBUG,
+        format='%(asctime)s:%(levelname)s:%(message)s'
+    )
     return logger
 
 
