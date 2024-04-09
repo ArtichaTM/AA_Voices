@@ -162,15 +162,18 @@ class Downloader:
             with save_path.open('wb+') as f: 
                 f.write(await response.read())
 
-    async def recheckAllVoices(self, bar: type[Bar] | None = None) -> None:
+    async def recheckAllVoices(self, bar: type[Bar] | None = None, bar_arguments: dict = None) -> None:
         logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         assert bar is None or issubclass(bar, Bar)
+        assert bar_arguments is None or isinstance(bar, dict)
+        if bar_arguments is None: bar_arguments = dict()
+
         await self.updateInfo()
         await self.updateBasicServant()
         for i in range(1, self.basic_servant.collectionNoMax):
             voices = await ServantVoices.load(i)
             await voices.buildVoiceLinesDict(fill_all_ascensions=False)
-            await voices.updateVoices(bar=bar() if bar is not None else None)    
+            await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)    
 
     async def destroy(self) -> None:
         assert isinstance(self.session, ClientSession)
@@ -438,6 +441,7 @@ class ServantVoices:
         if bar is not None:
             voice_lines_amount = self.count_all_voice_lines()
             bar.max = voice_lines_amount
+            bar.suffix = '%(index)d/%(max)d %(eta)ds'
             bar.message = 'Loading Servant info'
             bar.update()
         self.path_voices.mkdir(exist_ok=True)
@@ -459,6 +463,7 @@ class ServantVoices:
                         await voice_line.download()
         if bar is not None:
             bar.message = f'Servant {self.id: >3} up-to-date'
+            bar.suffix = '%(index)d/%(max)d'
             bar.update()
             bar.finish()
         logger.info(f'Finished updating {self.id} voices')
