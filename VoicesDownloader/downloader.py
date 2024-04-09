@@ -23,6 +23,10 @@ async def main():
     logger.info('Downloader initialized')
     try:
         await downloader.recheckAllVoices(bar=Bar)
+        # await downloader.recheckAllVoices()
+    except:
+        logger.exception("Uncaught exception:")
+        raise
     finally:
         await downloader.destroy()
         logger.info('Shutdown')
