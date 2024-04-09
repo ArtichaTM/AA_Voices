@@ -1,5 +1,6 @@
 from typing import Any, Generator, Optional
 import asyncio
+import atexit
 import os
 from logging import getLogger
 import subprocess
@@ -13,6 +14,7 @@ from aiohttp import ClientSession
 from progress.bar import Bar
 
 __all__ = (
+    'NoVoiceLines',
     'Ascension',
     'Downloader',
     'VoiceLine',
@@ -22,6 +24,8 @@ __all__ = (
 )
 
 logger = getLogger('AA_voices_downloader')
+
+class NoVoiceLines(Exception): pass
 
 """
 Analog to code below:
@@ -112,6 +116,7 @@ class Downloader:
         self.timeout = timeout
         self.last_request = time()
         self.session = ClientSession()
+        atexit.register(self.destroy)
 
     async def updateInfo(self) -> None:
         info = await self.request('/info')
@@ -162,7 +167,11 @@ class Downloader:
             with save_path.open('wb+') as f: 
                 f.write(await response.read())
 
-    async def recheckAllVoices(self, bar: type[Bar] | None = None, bar_arguments: dict = None) -> None:
+    async def recheckAllVoices(
+            self,
+            bar: type[Bar] | None = None,
+            bar_arguments: dict | None = None
+        ) -> None:
         logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         assert bar is None or issubclass(bar, Bar)
         assert bar_arguments is None or isinstance(bar, dict)
@@ -175,9 +184,9 @@ class Downloader:
             await voices.buildVoiceLinesDict(fill_all_ascensions=False)
             await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)    
 
-    async def destroy(self) -> None:
+    def destroy(self) -> None:
         assert isinstance(self.session, ClientSession)
-        await self.session.close()
+        asyncio.run(self.session.close())
         self.session = None
 
 
@@ -220,7 +229,8 @@ class VoiceLine:
 
     @cached_property
     def ascension(self) -> Ascension:
-        return list(Ascension)[int(self.dictionary['id'][0][0])]
+        id: str = self.dictionary['id'][0]
+        return list(Ascension)[int(id[:id.find('_')])]
 
     @cached_property
     def type(self) -> VoiceLineCategory:
@@ -304,13 +314,29 @@ class VoiceLine:
             for source in source_paths:
                 source.unlink()
 
+    @staticmethod
+    def leftovers_delete(paths: list[Path]) -> None:
+        logger.warning('Exception during VoiceLine file download')
+        for path in paths:
+            path.unlink(missing_ok=True)
+        logger.warning('Unlinked temporary files successfully')
+
     async def download(self) -> None:
         downloader = Downloader()
         paths: list[Path] = []
+        atexit.register(self.leftovers_delete, paths)
         for index, voice_url in enumerate(self.voiceLinesURL()):
+            self.path_folder.mkdir(parents=True, exist_ok=True)
             paths.append(self.path_folder / f"{self.anyName}_{index}.mp3")
+            if paths[-1].exists():
+                getLogger('AA_voices_downloader').warning(
+                    "Found out leftovers before audio concatenation: "
+                    f'"{paths[-1].absolute()}". '
+                    'This can be caused by program exit with error, or if file created by other process'
+                )
             await downloader.download(voice_url, paths[-1])
         self.concat_mp3(paths, self.path, delete_source=True)
+        atexit.unregister(self.leftovers_delete)
 
 
 class BasicServant:
@@ -426,11 +452,15 @@ class ServantVoices:
                     counter += len(type_values)
         return counter
 
-
     async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
+        downloader = Downloader()
+        if not len(self.voice_lines):
+            raise NoVoiceLines("Trying to updateVoices before buildVoiceLinesDict() called")
+        if not hasattr(downloader, 'timestamps'):
+            await downloader.updateInfo()
         if not self.path_json.exists():
             logger.info(f"S{self.id}: JSON doesn't exist, but must exist")
-        elif Downloader().timestamps['NA'] > self.path.lstat().st_mtime:
+        elif downloader.timestamps['NA'] > self.path.lstat().st_mtime:
             logger.info(f'S{self.id}: folder modified before NA patch')
             current_json = loads(self.path_json.read_text(encoding='utf-8'))
             new_json = await self.get_json(self.id)
