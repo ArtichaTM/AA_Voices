@@ -112,8 +112,8 @@ class Downloader:
 
     async def updateInfo(self):
         info = await self.request('/info')
-        assert len(self.timestamps) > 0
         self.timestamps = {region: data['timestamp'] for region, data in info.items() if region in {'NA', 'JP'}}
+        assert len(self.timestamps) > 0
 
     async def request(self, address: str, params: dict = dict()) -> dict:
         assert isinstance(self.session, ClientSession)
