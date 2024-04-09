@@ -453,7 +453,7 @@ class ServantVoices:
                     for voice_line in type_values:
                         if bar is not None:
                             bar.next()
-                            bar.message = f"{ascension.name}: {voice_line.anyName: <30}"[:20]
+                            bar.message = f"{ascension.name}: {voice_line.name: <30}"[:36]
                         if voice_line.loaded:
                             continue
                         await voice_line.download()
