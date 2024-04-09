@@ -355,7 +355,9 @@ class ServantVoices:
             if type not in output[ascension]:
                 output[ascension][type] = dict()
             for line in voices['voiceLines']:
-                name = line['name'].replace(':', ' -')
+                if 'name' not in line:
+                    continue
+                name = line['name']
                 if name not in output[ascension][type]:
                     output[ascension][type][name] = []
                 line['svt_id'] = self.id
@@ -396,10 +398,9 @@ class ServantVoices:
             bar.max = voice_lines_amount
             bar.message = 'Loading Servant info'
             bar.update()
-        folder_voices = self.path / Downloader.VOICES_FOLDER_NAME
-        folder_voices.mkdir(exist_ok=True)
+        self.path_voices.mkdir(exist_ok=True)
         for ascension, ascension_values in self.voice_lines.items():
-            folder_ascension = folder_voices / ascension.name
+            folder_ascension = self.path_voices / ascension.name
             folder_ascension.mkdir(exist_ok=True)
             for category, category_values in ascension_values.items():
                 folder_category = folder_ascension / category.name
