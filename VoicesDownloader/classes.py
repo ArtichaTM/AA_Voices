@@ -322,8 +322,17 @@ class VoiceLine:
         logger.warning('Exception during VoiceLine file download')
         if len(paths) == 0:
             return
-        paths[0].parent.rmdir()
-        logger.warning('Unlinked temporary files successfully')
+        for path in paths:
+            path.unlink(missing_ok=True)
+        directory = paths[0]
+        while True:
+            directory = directory.parent
+            if len(os.listdir(directory)) == 0:
+                directory.rmdir()
+                logger.info(f"Unlinked folder {directory.name} because it's empty")
+            else:
+                break
+        logger.info('Unlinked temporary files successfully')
 
     async def download(self) -> None:
         downloader = Downloader()
