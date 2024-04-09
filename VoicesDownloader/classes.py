@@ -56,7 +56,7 @@ class VoiceLineCategory(IntEnum):
     Home = 0
     Growth = 1
     FirstGet = 2
-    Batlle = 3
+    Battle = 3
     TreasureDevice = 4
     EventReward = 5
     MasterMission = 6
@@ -74,7 +74,7 @@ class VoiceLineCategory(IntEnum):
             case 'firstGet':
                 return cls.FirstGet
             case 'battle':
-                return cls.Batlle
+                return cls.Battle
             case 'treasureDevice':
                 return cls.TreasureDevice
             case 'eventReward':
