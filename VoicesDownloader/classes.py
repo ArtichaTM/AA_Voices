@@ -102,6 +102,8 @@ class Downloader:
         return cls._instance
 
     def __init__(self, delay: float = 1, timeout: float = 10) -> None:
+        assert isinstance(delay, (int, float))
+        assert isinstance(timeout, (int, float))
         if hasattr(self, 'delay'): return
         self.delay = delay
         self.timeout = timeout
@@ -110,6 +112,7 @@ class Downloader:
 
     async def updateInfo(self):
         info = await self.request('/info')
+        assert len(self.timestamps) > 0
         self.timestamps = {region: data['timestamp'] for region, data in info.items() if region in {'NA', 'JP'}}
 
     async def request(self, address: str, params: dict = dict()) -> dict:
@@ -117,6 +120,7 @@ class Downloader:
         assert isinstance(address, str)
         assert isinstance(params, dict)
         assert all([isinstance(key, str) for key in params.keys()])
+        assert all([isinstance(key, (str, int, float)) for key in params.values()])
 
         while time() - self.last_request > self.delay:
             await asyncio.sleep(time() - self.last_request)
@@ -137,17 +141,20 @@ class Downloader:
         while (time() - self.last_request) < self.delay:
             await asyncio.sleep(time() - self.last_request)
 
-        self.last_request = time() + self.timeout
+        self.last_request: float = time() + self.timeout
         if address.startswith('https'):
-            url = address
+            url: str = address
         else:
-            url = self.API_SERVER + address
+            url: str = self.API_SERVER + address
         async with self.session.get(url, allow_redirects=False, params=params) as response:
             logger.debug(f'Successfully downloaded {address} with {params}')
-            self.last_request = time()
+            self.last_request: float = time()
             save_path.parent.mkdir(parents=True, exist_ok=True)
             with save_path.open('wb+') as f: 
                 f.write(await response.read())
+
+    async def recheckAllVoices(self) -> None:
+        pass
 
     async def destroy(self) -> None:
         assert isinstance(self.session, ClientSession)
@@ -165,6 +172,9 @@ class VoiceLine:
         assert isinstance(values, dict)
         assert 'svt_id' in values, \
             "Servant id (svt_id) should be added in dictionary passed to VoiceLine"
+        assert 'name' in values
+        assert 'overwriteName' in values
+
         self.dictionary = values
         self.dictionary['name'] = self.dictionary['name']\
             .replace('{', '')\
@@ -288,12 +298,10 @@ class ServantVoices:
     __slots__ = (
         'id', 'voice_lines',
     )
-    id: int
-    voice_lines: ANNOTATION_VOICES
 
     def __init__(self, id: int):
-        self.id = id
-        self.voice_lines = dict()
+        self.id: int = id
+        self.voice_lines: ANNOTATION_VOICES = dict()
 
     def __repr__(self) -> str:
         return f"<Svt {self.id}" + (' with voice lines' if self.voice_lines else '') + '>'
