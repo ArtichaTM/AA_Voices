@@ -381,7 +381,6 @@ class ServantVoices:
 
 
     async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
-        logger.info(f'Requested update for servant {self.id}')
         if not self.path_json.exists():
             logger.info(f"S{self.id}: JSON doesn't exist, but must exist")
         elif Downloader().timestamps['NA'] > self.path.lstat().st_mtime:
@@ -419,3 +418,4 @@ class ServantVoices:
             bar.message = f'Servant {self.id} updated'
             bar.update()
             bar.finish()
+        logger.info(f'Finished updating {self.id} voices')
