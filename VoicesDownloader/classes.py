@@ -17,6 +17,7 @@ __all__ = (
     'Downloader',
     'VoiceLine',
     'ServantVoices',
+    'BasicServant',
     'MAINDIR'
 )
 
@@ -114,10 +115,16 @@ class Downloader:
 
     async def updateInfo(self) -> None:
         info = await self.request('/info')
+        assert isinstance(info, dict)
         self.timestamps = {region: data['timestamp'] for region, data in info.items() if region in {'NA', 'JP'}}
         assert len(self.timestamps) > 0
 
-    async def request(self, address: str, params: dict = dict()) -> dict:
+    async def updateBasicServant(self) -> None:
+        json = await self.request('/export/NA/basic_servant.json')
+        assert isinstance(json, list)
+        self.basic_servant: BasicServant = BasicServant(json)
+
+    async def request(self, address: str, params: dict = dict()) -> dict | list:
         assert isinstance(self.session, ClientSession)
         assert isinstance(address, str)
         assert isinstance(params, dict)
@@ -159,7 +166,8 @@ class Downloader:
         logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         assert bar is None or issubclass(bar, Bar)
         await self.updateInfo()
-        for i in range(1, 338):
+        await self.updateBasicServant()
+        for i in range(1, self.basic_servant.collectionNoMax):
             voices = await ServantVoices.load(i)
             await voices.buildVoiceLinesDict(fill_all_ascensions=False)
             await voices.updateVoices(bar=bar() if bar is not None else None)    
@@ -300,6 +308,20 @@ class VoiceLine:
         self.concat_mp3(paths, self.path, delete_source=True)
 
 
+class BasicServant:
+    __slots__ = ('__dict__', 'values')
+
+    def __init__(self, values: list) -> None:
+        self.values: dict[int, dict] = {i['collectionNo']: i for i in values}
+
+    def __getitem__(self, item: int) -> dict:
+        assert isinstance(item, int)
+        return self.values.__getitem__(item)
+
+    @cached_property
+    def collectionNoMax(self) -> int:
+        return max(self.values.keys())
+
 ANNOTATION_VOICE_CATEGORY = dict[VoiceLineCategory, dict[str, list[VoiceLine]]]
 ANNOTATION_VOICES = dict[Ascension, ANNOTATION_VOICE_CATEGORY]
 class ServantVoices:
@@ -328,10 +350,12 @@ class ServantVoices:
 
     @classmethod
     async def get_json(cls, id: int) -> dict:
-        return await Downloader().request(
-                address=f'/nice/NA/servant/{id}',
-                params={'lore': 'true'}
-            )
+        json = await Downloader().request(
+            address=f'/nice/NA/servant/{id}',
+            params={'lore': 'true'}
+        )
+        assert isinstance(json, dict)
+        return json
 
 
     @classmethod
