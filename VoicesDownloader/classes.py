@@ -62,6 +62,7 @@ class VoiceLineCategory(IntEnum):
     MasterMission = 6
     EventShop = 7
     BoxGachaTalk = 8
+    EventJoin = 9
 
     @classmethod
     def fromString(cls, value: str) -> 'VoiceLineCategory':
@@ -84,6 +85,8 @@ class VoiceLineCategory(IntEnum):
                 return cls.EventShop
             case 'boxGachaTalk':
                 return cls.BoxGachaTalk
+            case 'eventJoin':
+                return cls.EventJoin
             case _:
                 raise Exception(f"There's no such category: \"{value}\"")
 
