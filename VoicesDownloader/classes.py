@@ -1,5 +1,6 @@
 from typing import Any, Generator, Optional
 import asyncio
+import os
 from logging import getLogger
 import subprocess
 from enum import IntEnum
@@ -407,6 +408,8 @@ class ServantVoices:
             if current_json != new_json:
                 logger.info(f'S{self.id}: New JSON different from old')
                 self.path_voices.unlink(missing_ok=True)
+            else:
+                os.utime(self.path, (self.path.lstat().st_birthtime, time()))
         logger.info(f'Started updating {self.id} voices')
         if bar is not None:
             voice_lines_amount = self.count_all_voice_lines()
