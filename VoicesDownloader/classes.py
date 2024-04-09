@@ -166,6 +166,19 @@ class VoiceLine:
         assert 'svt_id' in values, \
             "Servant id (svt_id) should be added in dictionary passed to VoiceLine"
         self.dictionary = values
+        self.dictionary['name'] = self.dictionary['name']\
+            .replace('{', '')\
+            .replace('}', '')\
+            .replace(':', ' -')\
+            .strip()
+        self.dictionary['overwriteName'] = self.dictionary['overwriteName']\
+            .replace('{', '')\
+            .replace('}', '')\
+            .replace(':', ' -')\
+            .strip()
+        for i in ('name', 'overwriteName'):
+            if '\r' in self.dictionary[i]:
+                self.dictionary[i] = self.dictionary[i][:self.dictionary[i].find('\r')] 
 
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
@@ -186,16 +199,15 @@ class VoiceLine:
     def name(self) -> str:
         if self.dictionary['overwriteName']:
             return self.overwriteName
-        return self.dictionary['name'].strip()
+        return self.dictionary['name']
 
     @property
     def overwriteName(self) -> str:
-        return self.dictionary['overwriteName'].strip()
+        return self.dictionary['overwriteName']
 
     @property
     def anyName(self) -> str:
-        string = self.overwriteName if self.overwriteName else self.name
-        return string.replace('{', '').replace('}', '').replace(':', ' -').strip()
+        return self.overwriteName if self.overwriteName else self.name
 
     @property
     def downloaded(self) -> bool:
