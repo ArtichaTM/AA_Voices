@@ -320,8 +320,9 @@ class VoiceLine:
     @staticmethod
     def leftovers_delete(paths: list[Path]) -> None:
         logger.warning('Exception during VoiceLine file download')
-        for path in paths:
-            path.unlink(missing_ok=True)
+        if len(paths) == 0:
+            return
+        paths[0].parent.unlink()
         logger.warning('Unlinked temporary files successfully')
 
     async def download(self) -> None:
