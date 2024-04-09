@@ -486,11 +486,8 @@ class ServantVoices:
             bar.message = 'Loading Servant info'
             bar.update()
         for ascension, ascension_values in self.voice_lines.items():
-            folder_ascension = self.path_voices / ascension.name
-            for category, category_values in ascension_values.items():
-                folder_category = folder_ascension / category.name
-                for type, type_values in category_values.items():
-                    folder_type = folder_category / type
+            for category_values in ascension_values.values():
+                for type_values in category_values.values():
                     for voice_line in type_values:
                         if bar is not None:
                             bar.next()
