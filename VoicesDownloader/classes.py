@@ -420,6 +420,8 @@ class ServantVoices:
         return ServantVoices(id=id)
 
     async def buildVoiceLinesDict(self, fill_all_ascensions: bool = False) -> None:
+        if not self.path_json.exists():
+            raise RuntimeError("Load servants via ServantVoices.load() classmethod")
         data: dict = loads(self.path_json.read_text(encoding='utf-8'))
         output: ANNOTATION_VOICES = dict()
         for voices in data['profile']['voices']:
@@ -480,16 +482,12 @@ class ServantVoices:
             bar.suffix = '%(index)d/%(max)d %(eta)ds'
             bar.message = 'Loading Servant info'
             bar.update()
-        self.path_voices.mkdir(exist_ok=True)
         for ascension, ascension_values in self.voice_lines.items():
             folder_ascension = self.path_voices / ascension.name
-            folder_ascension.mkdir(exist_ok=True)
             for category, category_values in ascension_values.items():
                 folder_category = folder_ascension / category.name
-                folder_category.mkdir(exist_ok=True)
                 for type, type_values in category_values.items():
                     folder_type = folder_category / type
-                    folder_type.mkdir(exist_ok=True)
                     for voice_line in type_values:
                         if bar is not None:
                             bar.next()
