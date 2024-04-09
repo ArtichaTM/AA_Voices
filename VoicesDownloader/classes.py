@@ -377,7 +377,7 @@ class ServantVoices:
         if bar is not None:
             voice_lines_amount = self.count_all_voice_lines()
             bar.max = voice_lines_amount
-            bar.message = '.'.rjust(message_size)
+            bar.message = 'Loading Servant info'
             bar.update()
         folder_voices = self.path / Downloader.VOICES_FOLDER_NAME
         folder_voices.mkdir(exist_ok=True)
