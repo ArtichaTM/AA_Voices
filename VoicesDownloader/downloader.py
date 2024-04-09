@@ -3,7 +3,7 @@ from asyncio import run
 
 from progress.bar import Bar
 
-from classes import Downloader, ServantVoices
+from classes import Downloader
 
 def setUpLogger(level: int = logging.DEBUG) -> logging.Logger:
     logger = logging.getLogger('AA_voices_downloader')
