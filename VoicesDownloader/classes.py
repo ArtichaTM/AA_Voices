@@ -199,11 +199,13 @@ class VoiceLine:
             .replace('{', '')\
             .replace('}', '')\
             .replace(':', ' -')\
+            .replace('?', ' -')\
             .strip()
         self.dictionary['overwriteName'] = self.dictionary['overwriteName']\
             .replace('{', '')\
             .replace('}', '')\
             .replace(':', ' -')\
+            .replace('?', ' -')\
             .strip()
         for i in ('name', 'overwriteName'):
             if '\r' in self.dictionary[i]:
