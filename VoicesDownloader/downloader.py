@@ -22,12 +22,7 @@ async def main():
     downloader =  Downloader(delay=1, timeout=30)
     logger.info('Downloader initialized')
     try:
-        await downloader.updateInfo()
-        logger.info('Info updated')
-        for i in range(1, 338):
-            voices = await ServantVoices.load(i)
-            await voices.buildVoiceLinesDict(fill_all_ascensions=False)
-            await voices.updateVoices(bar=Bar())
+        await downloader.recheckAllVoices(bar=Bar)
     finally:
         await downloader.destroy()
         logger.info('Shutdown')

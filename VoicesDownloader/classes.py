@@ -87,7 +87,8 @@ MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
 
 class Downloader:
     __slots__ = (
-        'delay', 'timeout', 'timestamps', 'last_request', 'session'
+        'delay', 'timeout', 'timestamps', 'last_request', 'session',
+        'basic_servant'
     )
     timestamps: dict[str, float]
     _instance: Optional['Downloader'] = None
@@ -110,7 +111,7 @@ class Downloader:
         self.last_request = time()
         self.session = ClientSession()
 
-    async def updateInfo(self):
+    async def updateInfo(self) -> None:
         info = await self.request('/info')
         self.timestamps = {region: data['timestamp'] for region, data in info.items() if region in {'NA', 'JP'}}
         assert len(self.timestamps) > 0
@@ -153,8 +154,14 @@ class Downloader:
             with save_path.open('wb+') as f: 
                 f.write(await response.read())
 
-    async def recheckAllVoices(self) -> None:
-        pass
+    async def recheckAllVoices(self, bar: type[Bar] | None = None) -> None:
+        logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
+        assert bar is None or issubclass(bar, Bar)
+        await self.updateInfo()
+        for i in range(1, 338):
+            voices = await ServantVoices.load(i)
+            await voices.buildVoiceLinesDict(fill_all_ascensions=False)
+            await voices.updateVoices(bar=bar() if bar is not None else None)    
 
     async def destroy(self) -> None:
         assert isinstance(self.session, ClientSession)
