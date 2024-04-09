@@ -322,7 +322,7 @@ class VoiceLine:
         logger.warning('Exception during VoiceLine file download')
         if len(paths) == 0:
             return
-        paths[0].parent.unlink()
+        paths[0].parent.rmdir()
         logger.warning('Unlinked temporary files successfully')
 
     async def download(self) -> None:
