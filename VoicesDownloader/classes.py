@@ -453,12 +453,12 @@ class ServantVoices:
                     for voice_line in type_values:
                         if bar is not None:
                             bar.next()
-                            bar.message = f"{ascension.name}: {voice_line.anyName}"[:message_size] + '.'
+                            bar.message = f"{ascension.name}: {voice_line.anyName: <30}"[:20]
                         if voice_line.loaded:
                             continue
                         await voice_line.download()
         if bar is not None:
-            bar.message = f'Servant {self.id} updated'
+            bar.message = f'Servant {self.id: >3} up-to-date'
             bar.update()
             bar.finish()
         logger.info(f'Finished updating {self.id} voices')
