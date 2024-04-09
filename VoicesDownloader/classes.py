@@ -361,7 +361,7 @@ ANNOTATION_VOICE_CATEGORY = dict[VoiceLineCategory, dict[str, list[VoiceLine]]]
 ANNOTATION_VOICES = dict[Ascension, ANNOTATION_VOICE_CATEGORY]
 class ServantVoices:
     __slots__ = (
-        'id', 'voice_lines',
+        'id', 'voice_lines', 'amount',
     )
 
     def __init__(self, id: int):
@@ -424,6 +424,7 @@ class ServantVoices:
             raise RuntimeError("Load servants via ServantVoices.load() classmethod")
         data: dict = loads(self.path_json.read_text(encoding='utf-8'))
         output: ANNOTATION_VOICES = dict()
+        self.amount = 0
         for voices in data['profile']['voices']:
             type = VoiceLineCategory.fromString(voices['type'])
             ascension = list(Ascension)[voices['voicePrefix']]
@@ -439,6 +440,7 @@ class ServantVoices:
                     output[ascension][type][name] = []
                 line['svt_id'] = self.id
                 output[ascension][type][name].append(VoiceLine(line))
+                self.amount += 1
 
         if fill_all_ascensions:
             ascensionAdd = data['ascensionAdd']['voicePrefix']
@@ -449,14 +451,6 @@ class ServantVoices:
                 output[ascension_str] = output[target_ascension]
 
         self.voice_lines = output
-
-    def count_all_voice_lines(self) -> int:
-        counter = 0
-        for ascension_values in self.voice_lines.values():
-            for category_values in ascension_values.values():
-                for type_values in category_values.values():
-                    counter += len(type_values)
-        return counter
 
     async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
         downloader = Downloader()
@@ -477,7 +471,7 @@ class ServantVoices:
                 os.utime(self.path, (self.path.lstat().st_birthtime, time()))
         logger.info(f'Started updating {self.id} voices')
         if bar is not None:
-            voice_lines_amount = self.count_all_voice_lines()
+            voice_lines_amount = self.amount
             bar.max = voice_lines_amount
             bar.suffix = '%(index)d/%(max)d %(eta)ds'
             bar.message = 'Loading Servant info'
