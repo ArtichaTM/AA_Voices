@@ -17,13 +17,13 @@ def setUpLogger(level: int = logging.INFO) -> logging.Logger:
 
 
 async def amain():
-    logger = setUpLogger(level = logging.INFO)
+    logger = setUpLogger(level = logging.WARNING)
     logger.info('Starting')
     downloader =  Downloader(delay=1, timeout=30)
     logger.info('Downloader initialized')
 
     await downloader.recheckAllVoices(bar=Bar)
-    await downloader.recheckAllVoices()
+    # await downloader.recheckAllVoices()
     # servant = await ServantVoices.load(27)
     # await servant.buildVoiceLinesDict(False)
     # await servant.updateVoices(bar=Bar())

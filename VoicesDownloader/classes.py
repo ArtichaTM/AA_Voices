@@ -10,7 +10,9 @@ from json import loads
 from pathlib import Path
 from functools import cached_property
 
+import aiohttp
 from aiohttp import ClientSession
+import aiohttp.client_exceptions
 from progress.bar import Bar
 
 __all__ = (
@@ -163,12 +165,20 @@ class Downloader:
             url: str = address
         else:
             url: str = self.API_SERVER + address
-        async with self.session.get(url, allow_redirects=False, params=params) as response:
-            logger.debug(f'Successfully downloaded {address} with {params}')
-            self.last_request: float = time()
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            with save_path.open('wb+') as f: 
-                f.write(await response.read())
+        try:
+            async with self.session.get(url, allow_redirects=False, params=params) as response:
+                logger.debug(f'Successfully downloaded {address} with {params}')
+                self.last_request: float = time()
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                with save_path.open('wb+') as f: 
+                    f.write(await response.read())
+        except aiohttp.client_exceptions.ClientOSError:
+            await asyncio.sleep(1)
+            return await self.download(
+                address=address,
+                save_path=save_path,
+                params=params
+            )
 
     async def recheckAllVoices(
             self,
@@ -253,32 +263,28 @@ class VoiceLine:
     def type(self) -> VoiceLineCategory:
         return VoiceLineCategory.fromString(self.dictionary['svtVoiceType'])
 
-    @property
+    @cached_property
     def name(self) -> str:
         return self.dictionary['name']
 
-    @property
+    @cached_property
     def overwriteName(self) -> str:
         return self.dictionary['overwriteName']
 
-    @property
+    @cached_property
     def anyName(self) -> str:
         return self.overwriteName if self.overwriteName else self.name
 
-    @property
-    def downloaded(self) -> bool:
-        return self.path.exists()
-
-    @property
+    @cached_property
     def path_folder(self) -> Path:
         return Downloader.SERVANTS_FOLDER / str(self.servant_id) / Downloader.VOICES_FOLDER_NAME / \
-            self.ascension.name / self.type.name / self.anyName
+            self.ascension.name / self.type.name / self.name
 
-    @property
+    @cached_property
     def filename(self) -> str:
         return f"{self.name}.mp3"
 
-    @property
+    @cached_property
     def path(self) -> Path:
         return self.path_folder / self.filename
 
@@ -511,7 +517,7 @@ class ServantVoices:
                             bar.next()
                             bar.message = f"{ascension.name}: {voice_line.name: <30}"[:36]
                         if voice_line.loaded:
-                            voice_line.touch()
+                            await voice_line.touch()
                             continue
                         await voice_line.download()
         if bar is not None:
