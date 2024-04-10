@@ -185,6 +185,8 @@ class Downloader:
         for i in range(1, self.basic_servant.collectionNoMax):
             voices = await ServantVoices.load(i)
             voices.buildVoiceLinesDict(fill_all_ascensions=False)
+            assert voices.voice_lines, 'How voice lines can be empty after buildVoiceLinesDict()?'
+            await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)
 
     def destroy(self) -> None:
         assert isinstance(self.session, ClientSession)
@@ -204,6 +206,10 @@ class VoiceLine:
             "Servant id (svt_id) should be added in dictionary passed to VoiceLine"
         assert 'name' in values
         assert 'overwriteName' in values
+        assert 'svtVoiceType' in values
+        assert isinstance(values['name'], str)
+        assert isinstance(values['overwriteName'], str)
+        assert isinstance(values['svtVoiceType'], str)
 
         self.dictionary = values
         self.dictionary['name'] = self.dictionary['name']\
@@ -220,7 +226,16 @@ class VoiceLine:
             .strip()
         for i in ('name', 'overwriteName'):
             if '\r' in self.dictionary[i]:
-                self.dictionary[i] = self.dictionary[i][:self.dictionary[i].find('\r')] 
+                self.dictionary[i] = self.dictionary[i][:self.dictionary[i].find('\r')]
+
+        """
+        In events types, like
+        "Land of Shadows Battleground Blitz - A Cat, a Bunny, and a Holy Grail War 6"
+        we need to cut long strings. So, we finding dash and removing everything after it
+        including dash
+        Also, some events starts with "Revival -", so we must detect this
+        """
+        self.dictionary['overwriteName'] = '/'.join(self.dictionary['overwriteName'].split(' - '))
 
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
@@ -240,8 +255,6 @@ class VoiceLine:
 
     @property
     def name(self) -> str:
-        if self.dictionary['overwriteName']:
-            return self.overwriteName
         return self.dictionary['name']
 
     @property
@@ -263,7 +276,7 @@ class VoiceLine:
 
     @property
     def filename(self) -> str:
-        return f"{self.anyName}.mp3"
+        return f"{self.name}.mp3"
 
     @property
     def path(self) -> Path:
@@ -284,6 +297,7 @@ class VoiceLine:
         target_exist_ok: bool = True
     ) -> None:
         assert len({str(i.parent) for i in source_paths}) == 1  # Same parent folder
+        assert not target_path.exists()
 
         if target_path.exists():
             if target_exist_ok:
@@ -349,6 +363,10 @@ class VoiceLine:
             await downloader.download(voice_url, paths[-1])
         self.concat_mp3(paths, self.path, delete_source=True)
         atexit.unregister(self.leftovers_delete)
+
+    async def touch(self) -> None:
+        assert self.loaded
+        os.utime(self.path, (self.path.lstat().st_birthtime, time()))
 
 
 class BasicServant:
@@ -458,11 +476,12 @@ class ServantVoices:
                 assert target_ascension in output
                 output[ascension_str] = output[target_ascension]
 
+        assert output
         self.voice_lines = output
 
     async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
         downloader = Downloader()
-        if not len(self.voice_lines):
+        if not self.voice_lines:
             raise NoVoiceLines("Trying to updateVoices before buildVoiceLinesDict() called")
         if not hasattr(downloader, 'timestamps'):
             await downloader.updateInfo()
@@ -492,6 +511,7 @@ class ServantVoices:
                             bar.next()
                             bar.message = f"{ascension.name}: {voice_line.name: <30}"[:36]
                         if voice_line.loaded:
+                            voice_line.touch()
                             continue
                         await voice_line.download()
         if bar is not None:
