@@ -245,7 +245,9 @@ class VoiceLine:
         including dash
         Also, some events starts with "Revival -", so we must detect this
         """
-        self.dictionary['overwriteName'] = '/'.join(self.dictionary['overwriteName'].split(' - '))
+        self.dictionary['overwriteName'] = '/'.join(
+            i.strip() for i in self.dictionary['overwriteName'].split(' - ')
+        )
 
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
@@ -278,11 +280,11 @@ class VoiceLine:
     @cached_property
     def path_folder(self) -> Path:
         return Downloader.SERVANTS_FOLDER / str(self.servant_id) / Downloader.VOICES_FOLDER_NAME / \
-            self.ascension.name / self.type.name / self.name
+            self.ascension.name / self.type.name / self.anyName
 
     @cached_property
     def filename(self) -> str:
-        return f"{self.name}.mp3"
+        return f"{self.name if self.name else 'file'}.mp3"
 
     @cached_property
     def path(self) -> Path:
@@ -295,46 +297,34 @@ class VoiceLine:
     def voiceLinesURL(self) -> Generator[str, None, None]:
         yield from self.dictionary['audioAssets']
 
-    @staticmethod
     def concat_mp3(
-        source_paths: list[Path],
-        target_path: Path,
-        delete_source: bool = True,
-        target_exist_ok: bool = True
+        self,
+        source_paths: list[Path]
     ) -> None:
         assert len({str(i.parent) for i in source_paths}) == 1  # Same parent folder
-        assert not target_path.exists()
-
-        if target_path.exists():
-            if target_exist_ok:
-                target_path.unlink()
-            else:
-                raise FileNotFoundError("Target existing when parameter target_exist_ok is False")
+        assert not self.loaded
+        assert source_paths
 
         filenames = [i.name for i in source_paths]
-        if target_path.parent == source_paths[0].parent:
-            target_str: str = target_path.name
-        else:
-            target_str: str = str(target_path.absolute())
 
         command = (
             f"{Downloader.FFMPEG_PATH} -i \"concat:"
             f"{'|'.join(filenames)}"
             '" -c copy '
-            f'"{target_str}"'
+            f'"{self.filename}"'
         )
+        # print(f'Concat command: {command} in folder {self.path_folder}')
         subprocess.call(
             args=command,
-            cwd=target_path.parent,
+            cwd=self.path_folder,
             timeout=2,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
 
-        if delete_source:
-            for source in source_paths:
-                source.unlink()
+        # for source in source_paths: TODO: uncomment when everything fixed
+        #     source.unlink()
 
     @staticmethod
     def leftovers_delete(paths: list[Path]) -> None:
@@ -359,7 +349,7 @@ class VoiceLine:
         atexit.register(self.leftovers_delete, paths)
         for index, voice_url in enumerate(self.voiceLinesURL()):
             self.path_folder.mkdir(parents=True, exist_ok=True)
-            paths.append(self.path_folder / f"{self.anyName}_{index}.mp3")
+            paths.append(self.path_folder / f"{self.name}_{index}.mp3")
             if paths[-1].exists():
                 getLogger('AA_voices_downloader').warning(
                     "Found out leftovers before audio concatenation: "
@@ -367,7 +357,7 @@ class VoiceLine:
                     'This can be caused by program exit with error, or if file created by other process'
                 )
             await downloader.download(voice_url, paths[-1])
-        self.concat_mp3(paths, self.path, delete_source=True)
+        self.concat_mp3(paths)
         atexit.unregister(self.leftovers_delete)
 
     async def touch(self) -> None:
