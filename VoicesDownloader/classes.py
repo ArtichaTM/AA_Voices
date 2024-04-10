@@ -313,7 +313,6 @@ class VoiceLine:
             '" -c copy '
             f'"{self.filename}"'
         )
-        # print(f'Concat command: {command} in folder {self.path_folder}')
         subprocess.call(
             args=command,
             cwd=self.path_folder,
@@ -323,8 +322,8 @@ class VoiceLine:
             stderr=subprocess.DEVNULL
         )
 
-        # for source in source_paths: TODO: uncomment when everything fixed
-        #     source.unlink()
+        for source in source_paths:
+            source.unlink()
 
     @staticmethod
     def leftovers_delete(paths: list[Path]) -> None:
@@ -349,7 +348,8 @@ class VoiceLine:
         atexit.register(self.leftovers_delete, paths)
         for index, voice_url in enumerate(self.voiceLinesURL()):
             self.path_folder.mkdir(parents=True, exist_ok=True)
-            paths.append(self.path_folder / f"{self.name}_{index}.mp3")
+            paths.append(self.path)
+            paths[-1] = paths[-1].with_stem(f"{paths[-1].stem}_{index}")
             if paths[-1].exists():
                 getLogger('AA_voices_downloader').warning(
                     "Found out leftovers before audio concatenation: "
