@@ -184,8 +184,7 @@ class Downloader:
         await self.updateBasicServant()
         for i in range(1, self.basic_servant.collectionNoMax):
             voices = await ServantVoices.load(i)
-            await voices.buildVoiceLinesDict(fill_all_ascensions=False)
-            await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)    
+            voices.buildVoiceLinesDict(fill_all_ascensions=False)
 
     def destroy(self) -> None:
         assert isinstance(self.session, ClientSession)
@@ -428,7 +427,7 @@ class ServantVoices:
 
         return ServantVoices(id=id)
 
-    async def buildVoiceLinesDict(self, fill_all_ascensions: bool = False) -> None:
+    def buildVoiceLinesDict(self, fill_all_ascensions: bool = False) -> None:
         if not self.path_json.exists():
             raise RuntimeError("Load servants via ServantVoices.load() classmethod")
         data: dict = loads(self.path_json.read_text(encoding='utf-8'))
