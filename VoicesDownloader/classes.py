@@ -28,6 +28,7 @@ __all__ = (
 logger = getLogger('AA_voices_downloader')
 
 class NoVoiceLines(Exception): pass
+class FFMPEGException(Exception): pass
 
 """
 Analog to code below:
@@ -195,7 +196,6 @@ class Downloader:
         for i in range(1, self.basic_servant.collectionNoMax):
             voices = await ServantVoices.load(i)
             voices.buildVoiceLinesDict(fill_all_ascensions=False)
-            assert voices.voice_lines, 'How voice lines can be empty after buildVoiceLinesDict()?'
             await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)
 
     def destroy(self) -> None:
@@ -313,7 +313,7 @@ class VoiceLine:
             '" -c copy '
             f'"{self.filename}"'
         )
-        subprocess.call(
+        ret = subprocess.call(
             args=command,
             cwd=self.path_folder,
             timeout=2,
@@ -321,6 +321,7 @@ class VoiceLine:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
+        if ret != 0: raise FFMPEGException("ffmpeg returned non-zero code")
 
         for source in source_paths:
             source.unlink()
@@ -380,7 +381,7 @@ class BasicServant:
         return max(self.values.keys())
 
 ANNOTATION_VOICE_CATEGORY = dict[VoiceLineCategory, dict[str, list[VoiceLine]]]
-ANNOTATION_VOICES = dict[Ascension, ANNOTATION_VOICE_CATEGORY]
+ANNOTATION_VOICES = dict[Ascension, ANNOTATION_VOICE_CATEGORY] | None
 class ServantVoices:
     __slots__ = (
         'id', 'voice_lines', 'amount',
@@ -388,7 +389,7 @@ class ServantVoices:
 
     def __init__(self, id: int):
         self.id: int = id
-        self.voice_lines: ANNOTATION_VOICES = dict()
+        self.voice_lines: ANNOTATION_VOICES = None
 
     def __repr__(self) -> str:
         return f"<Svt {self.id}" + (' with voice lines' if self.voice_lines else '') + '>'
@@ -472,12 +473,11 @@ class ServantVoices:
                 assert target_ascension in output
                 output[ascension_str] = output[target_ascension]
 
-        assert output
         self.voice_lines = output
 
     async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
         downloader = Downloader()
-        if not self.voice_lines:
+        if self.voice_lines is None:
             raise NoVoiceLines("Trying to updateVoices before buildVoiceLinesDict() called")
         if not hasattr(downloader, 'timestamps'):
             await downloader.updateInfo()
