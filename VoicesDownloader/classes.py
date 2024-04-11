@@ -1,11 +1,13 @@
 from typing import Any, Generator, Optional
 import asyncio
+import threading
 import atexit
 import os
 from logging import getLogger
 import subprocess
 from enum import IntEnum
 from time import time
+from time import sleep
 from json import loads
 from pathlib import Path
 from functools import cached_property
@@ -14,6 +16,7 @@ import aiohttp
 from aiohttp import ClientSession
 import aiohttp.client_exceptions
 from progress.bar import Bar
+from progress.spinner import Spinner
 
 __all__ = (
     'NoVoiceLines',
@@ -108,8 +111,8 @@ MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
 
 class Downloader:
     __slots__ = (
-        'delay', 'timeout', 'timestamps', 'last_request', 'session',
-        'basic_servant'
+        'delay', 'maximum_retries', 'timestamps', 'last_request',
+        'session', 'basic_servant', 'animation_bool', 'animation_speed'
     )
     timestamps: dict[str, float]
     _instance: Optional['Downloader'] = None
@@ -123,42 +126,88 @@ class Downloader:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, delay: float = 1, timeout: float = 10) -> None:
+    def __init__(self, delay: float = 1, maximum_retries: int = 3) -> None:
         assert isinstance(delay, (int, float))
-        assert isinstance(timeout, (int, float))
+        assert isinstance(maximum_retries, int)
         if hasattr(self, 'delay'): return
+        logger.info(f"Initialized Downloader with params {delay=}, {maximum_retries=}")
         self.delay = delay
-        self.timeout = timeout
+        self.maximum_retries = maximum_retries
         self.last_request = time()
         self.session = ClientSession()
+        self.animation_bool = False
+        self.animation_speed = 0.5
         atexit.register(self.destroy)
 
+    def _spinner_thread(self, spinner: Spinner):
+        logger.info("Spinner thread started")
+        self.animation_bool = True
+        while self.animation_bool:
+            spinner.next()
+            sleep(self.animation_speed)
+        logger.info("Spinner thread ended")
+
     async def updateInfo(self) -> None:
-        info = await self.request('/info')
+        info = await self.request_json('/info')
         assert isinstance(info, dict)
         self.timestamps = {region: data['timestamp'] for region, data in info.items() if region in {'NA', 'JP'}}
         assert len(self.timestamps) > 0
 
     async def updateBasicServant(self) -> None:
-        json = await self.request('/export/NA/basic_servant.json')
+        json = await self.request_json('/export/NA/basic_servant.json')
         assert isinstance(json, list)
         self.basic_servant: BasicServant = BasicServant(json)
 
-    async def request(self, address: str, params: dict = dict()) -> dict | list:
+    async def request(self, address: str, params: dict | None = dict()) -> bytes:
         assert isinstance(self.session, ClientSession)
         assert isinstance(address, str)
-        assert isinstance(params, dict)
-        assert all([isinstance(key, str) for key in params.keys()])
-        assert all([isinstance(key, (str, int, float)) for key in params.values()])
+        if params is not None:
+            assert isinstance(params, dict)
+            assert all([isinstance(key, (str, int, float)) for key in params.values()])
+            assert all([isinstance(key, str) for key in params.keys()])
 
-        while time() - self.last_request > self.delay:
+        if address.startswith('https'):
+            url: str = address
+        else:
+            url: str = self.API_SERVER + address
+
+        while (time() - self.last_request) < self.delay:
             await asyncio.sleep(time() - self.last_request)
 
-        self.last_request = time() + self.timeout
-        async with self.session.get(self.API_SERVER + address, params=params, allow_redirects=False) as response:
-            logger.debug(f'Successfully got {address} with {params} by request')
-            self.last_request = time()
-            return loads(await response.text())
+        self.last_request = time() + self.delay
+        calls_amount = 1
+        while True:
+            logger.debug(f'Request to {url} with {params}')
+            try:
+                async with self.session.get(url, params=params, allow_redirects=False) as response:
+                    if calls_amount != 1:
+                        logger.info(f"Successfully got {url} with {params} after {calls_amount-1} retries")
+                    else:
+                        logger.debug(f'Successfully got {url} with {params}')
+                    self.last_request = time()
+                    return await response.read()
+            except aiohttp.client_exceptions.ClientError as e:
+                logger.exception(
+                    f'Caught aiohttp exception during request ({calls_amount}) '
+                    f'to \"{url}\" with params={params},'
+                    f'\tException {type(e).__name__}({e.args})',
+                    exc_info=False
+                )
+                if calls_amount > self.maximum_retries:
+                    logger.info(f'Reached maximum amount of retries ({calls_amount} > {self.maximum_retries})')
+                    raise
+                if calls_amount > 7:
+                    await asyncio.sleep(7**3)
+                else:
+                    # 0 1 8 27 64 125 216 343 343 ...
+                    await asyncio.sleep(calls_amount**3)
+            calls_amount += 1
+
+    async def request_json(self, address: str, params: dict = dict()) -> dict | list:
+        return loads(await self.request(
+            address=address,
+            params=params
+        ))
 
     async def download(self, address: str, save_path: Path, params: dict | None = None) -> None:
         assert isinstance(self.session, ClientSession)
@@ -166,29 +215,12 @@ class Downloader:
         assert isinstance(save_path, Path)
         assert isinstance(params, dict) or params is None
 
-        if params is None: params = dict()
-        while (time() - self.last_request) < self.delay:
-            await asyncio.sleep(time() - self.last_request)
-
-        self.last_request: float = time() + self.timeout
-        if address.startswith('https'):
-            url: str = address
-        else:
-            url: str = self.API_SERVER + address
-        try:
-            async with self.session.get(url, allow_redirects=False, params=params) as response:
-                logger.debug(f'Successfully downloaded {address} with {params}')
-                self.last_request: float = time()
-                save_path.parent.mkdir(parents=True, exist_ok=True)
-                with save_path.open('wb+') as f: 
-                    f.write(await response.read())
-        except aiohttp.client_exceptions.ClientOSError:
-            await asyncio.sleep(1)
-            return await self.download(
-                address=address,
-                save_path=save_path,
-                params=params
-            )
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_json = await self.request(
+            address=address,
+            params=params
+        )
+        save_path.write_bytes(raw_json)
 
     async def recheckAllVoices(
             self,
@@ -200,8 +232,22 @@ class Downloader:
         assert bar_arguments is None or isinstance(bar, dict)
         if bar_arguments is None: bar_arguments = dict()
 
+        spinner = Spinner(message='Updating info')
+        thread = threading.Thread(
+            name='Spinner',
+            daemon=True,
+            target=self._spinner_thread,
+            args=(spinner,)
+        )
+        thread.start()
+
         await self.updateInfo()
+        spinner.message = 'Updating Basic Servant '
         await self.updateBasicServant()
+        spinner.message = 'Finished '
+        self.animation_bool = False
+        thread.join()
+        spinner.finish()
         try:
             for i in range(1, self.basic_servant.collectionNoMax):
                 voices = await ServantVoices.load(i)
@@ -438,7 +484,7 @@ class ServantVoices:
 
     @classmethod
     async def _get_json(cls, id: int) -> dict:
-        json = await Downloader().request(
+        json = await Downloader().request_json(
             address=f'/nice/NA/servant/{id}',
             params={'lore': 'true'}
         )
@@ -451,7 +497,6 @@ class ServantVoices:
         servant_folder = Downloader.SERVANTS_FOLDER / f"{id}"
         servant_json_path = servant_folder / 'info.json'
         servant_json_path.parent.mkdir(parents=True, exist_ok=True)
-        servant_json_path.touch(exist_ok=True)
 
         await Downloader().download(
             address=f'/nice/NA/servant/{id}',
@@ -529,7 +574,7 @@ class ServantVoices:
         if not hasattr(downloader, 'timestamps'):
             await downloader.updateInfo()
         if not self.path_json.exists():
-            logger.info(f"S{self.id}: JSON doesn't exist, but must exist")
+            logger.exception(f"S{self.id}: JSON doesn't exist, but must exist")
         elif downloader.timestamps['NA'] > self.path.lstat().st_mtime:
             logger.info(f'S{self.id}: folder modified before NA patch')
             current_json = loads(self.path_json.read_text(encoding='utf-8'))
@@ -539,7 +584,7 @@ class ServantVoices:
                 self.path_voices.unlink(missing_ok=True)
             else:
                 touch_file(self.path)
-        logger.info(f'Started updating {self.id} voices')
+        logger.debug(f'Started updating {self.id} voices')
         if bar is not None:
             voice_lines_amount = self.amount
             bar.max = voice_lines_amount
@@ -562,4 +607,4 @@ class ServantVoices:
             bar.suffix = '%(index)d/%(max)d'
             bar.update()
             bar.finish()
-        logger.info(f'Finished updating {self.id} voices')
+        logger.debug(f'Finished updating {self.id} voices')
