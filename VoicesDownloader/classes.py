@@ -404,6 +404,17 @@ class VoiceLine:
         output, err = p.communicate(timeout=10)
         ret = p.returncode
         if ret != 0:
+            # May be server returned in response error?
+            for i in source_paths:
+                try:
+                    loaded: dict = json.loads(i.read_bytes())
+                except json.decoder.JSONDecodeError:
+                    continue
+                raise DownloadException(
+                    f"File {self.path} couldn't be downloaded due to error received from AA:\n"
+                    + json.dumps(loaded, indent=4)
+                )
+
             raise FFMPEGException(
                 "FFMpeg returned non-zero code. Leftovers left untouched. Additional info:"
                 "\n> Command: "  + command +
