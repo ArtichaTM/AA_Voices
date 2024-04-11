@@ -4,12 +4,12 @@ import asyncio
 import threading
 import atexit
 import os
+import json
 from logging import getLogger
 import subprocess
 from enum import IntEnum
 from time import time
 from time import sleep
-from json import loads
 from pathlib import Path
 from functools import cached_property
 
@@ -39,6 +39,7 @@ async def update_modified_date(path: Path):
 
 class NoVoiceLines(Exception): pass
 class FFMPEGException(Exception): pass
+class DownloadException(Exception): pass
 
 """
 Analog to code below:
@@ -208,7 +209,7 @@ class Downloader:
             calls_amount += 1
 
     async def request_json(self, address: str, params: dict = dict()) -> dict | list:
-        return loads(await self.request(
+        return json.loads(await self.request(
             address=address,
             params=params
         ))
@@ -551,7 +552,7 @@ class ServantVoices:
     def buildVoiceLinesDict(self, fill_all_ascensions: bool = False) -> None:
         if not self.path_json.exists():
             raise RuntimeError("Load servants via ServantVoices.load() classmethod")
-        data: dict = loads(self.path_json.read_text(encoding='utf-8'))
+        data: dict = json.loads(self.path_json.read_text(encoding='utf-8'))
         output: ANNOTATION_VOICES = dict()
         self.amount = 0
         name_counters: dict[VoiceLineCategory, int] = dict()
@@ -608,7 +609,7 @@ class ServantVoices:
             logger.exception(f"S{self.id}: JSON doesn't exist, but must exist")
         elif downloader.timestamps['NA'] > self.path.lstat().st_mtime:
             logger.info(f'S{self.id}: folder modified before NA patch')
-            current_json = loads(self.path_json.read_text(encoding='utf-8'))
+            current_json = json.loads(self.path_json.read_text(encoding='utf-8'))
             new_json = await self._get_json(self.id)
             if current_json != new_json:
                 logger.info(f'S{self.id}: New JSON different from old')
