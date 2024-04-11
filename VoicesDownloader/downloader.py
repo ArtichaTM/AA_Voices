@@ -17,16 +17,17 @@ def setUpLogger(level: int = logging.INFO) -> logging.Logger:
 
 
 async def amain():
-    logger = setUpLogger(level = logging.WARNING)
+    logger = setUpLogger(level = logging.INFO)
     logger.info('Starting')
-    downloader =  Downloader(delay=3, maximum_retries=7)
+    downloader =  Downloader(delay=1, maximum_retries=7)
     logger.info('Downloader initialized')
 
     await downloader.recheckAllVoices(bar=Bar)
     # await downloader.recheckAllVoices()
-    # servant = await ServantVoices.load(27)
-    # await servant.buildVoiceLinesDict(False)
+    # servant = await ServantVoices.load(16)
+    # servant.buildVoiceLinesDict(False)
     # await servant.updateVoices(bar=Bar())
+    # await servant.updateVoices()
 
 def main() -> None:
     logger = logging.getLogger('AA_voices_downloader')
