@@ -197,6 +197,12 @@ class Downloader:
             voices = await ServantVoices.load(i)
             voices.buildVoiceLinesDict(fill_all_ascensions=False)
             await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)
+        except:
+            logger.warning(
+                "Exception during Downloader.recheckAllVoices(). "
+                f"Updated {i}/{self.basic_servant.collectionNoMax} servants"
+            )
+            raise
 
     def destroy(self) -> None:
         assert isinstance(self.session, ClientSession)
