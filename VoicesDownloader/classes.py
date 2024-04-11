@@ -66,6 +66,7 @@ class VoiceLineCategory(IntEnum):
     EventShop = 7
     BoxGachaTalk = 8
     EventJoin = 9
+    Guide = 10
 
     @classmethod
     def fromString(cls, value: str) -> 'VoiceLineCategory':
@@ -90,6 +91,8 @@ class VoiceLineCategory(IntEnum):
                 return cls.BoxGachaTalk
             case 'eventJoin':
                 return cls.EventJoin
+            case 'guide':
+                return cls.Guide
             case _:
                 raise Exception(f"There's no such category: \"{value}\"")
 
@@ -491,6 +494,15 @@ class ServantVoices:
                 output[ascension_str] = output[target_ascension]
 
         self.voice_lines = output
+
+    def loadedVoices(self) -> Generator[VoiceLine, None, None]:
+        assert isinstance(self.voice_lines, dict)
+        for ascension_values in self.voice_lines.values():
+            for category_values in ascension_values.values():
+                for type_values in category_values.values():
+                    for voice_line in type_values:
+                        if voice_line.loaded:
+                            yield voice_line
 
     async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
         downloader = Downloader()
