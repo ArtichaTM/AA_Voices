@@ -27,6 +27,12 @@ __all__ = (
 
 logger = getLogger('AA_voices_downloader')
 
+
+def touch_file(path: Path):
+    assert path.exists()
+    os.utime(path, (path.lstat().st_birthtime, time()))
+
+
 class NoVoiceLines(Exception): pass
 class FFMPEGException(Exception): pass
 
@@ -387,7 +393,7 @@ class VoiceLine:
 
     async def touch(self) -> None:
         assert self.loaded
-        os.utime(self.path, (self.path.lstat().st_birthtime, time()))
+        touch_file(self.path)
 
 
 class BasicServant:
@@ -532,7 +538,7 @@ class ServantVoices:
                 logger.info(f'S{self.id}: New JSON different from old')
                 self.path_voices.unlink(missing_ok=True)
             else:
-                os.utime(self.path, (self.path.lstat().st_birthtime, time()))
+                touch_file(self.path)
         logger.info(f'Started updating {self.id} voices')
         if bar is not None:
             voice_lines_amount = self.amount
