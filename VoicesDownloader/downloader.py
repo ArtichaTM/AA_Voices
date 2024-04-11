@@ -4,7 +4,7 @@ from asyncio import run
 from progress.bar import Bar
 from progress.spinner import Spinner
 
-from classes import Downloader, ServantVoices
+from classes import Downloader
 
 def setUpLogger(level: int = logging.INFO) -> logging.Logger:
     logger = logging.getLogger('AA_voices_downloader')
@@ -18,7 +18,7 @@ def setUpLogger(level: int = logging.INFO) -> logging.Logger:
 
 
 async def amain():
-    logger = setUpLogger(level = logging.WARNING)
+    logger = setUpLogger(level = logging.INFO)
     logger.info('Starting')
     downloader =  Downloader(delay=1, maximum_retries=7)
     logger.info('Downloader initialized')

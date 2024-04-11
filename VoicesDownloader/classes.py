@@ -1,3 +1,4 @@
+from io import StringIO
 from typing import Any, Generator, Optional
 import asyncio
 import threading
@@ -393,7 +394,6 @@ class VoiceLine:
         p = subprocess.Popen(
             args=command,
             cwd=self.path_folder,
-            timeout=2,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
@@ -451,7 +451,6 @@ class VoiceLine:
         try:
             self.concat_mp3(paths)
         except FFMPEGException:
-            # Unregister leftovers delete
             atexit.unregister(self._leftovers_delete)
             raise
         else:
@@ -616,8 +615,8 @@ class ServantVoices:
                 for type_values in category_values.values():
                     for voice_line in type_values:
                         if bar is not None:
-                            bar.next()
                             bar.message = f"{voice_line.ascension.name}: {voice_line.name: <30}"[:36]
+                            bar.next()
                         if voice_line.loaded:
                             continue
                         downloaded_counter += 1
