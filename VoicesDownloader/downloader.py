@@ -2,6 +2,7 @@ import logging
 from asyncio import run
 
 from progress.bar import Bar
+from progress.spinner import Spinner
 
 from classes import Downloader, ServantVoices
 
@@ -17,12 +18,12 @@ def setUpLogger(level: int = logging.INFO) -> logging.Logger:
 
 
 async def amain():
-    logger = setUpLogger(level = logging.INFO)
+    logger = setUpLogger(level = logging.WARNING)
     logger.info('Starting')
     downloader =  Downloader(delay=1, maximum_retries=7)
     logger.info('Downloader initialized')
 
-    await downloader.recheckAllVoices(bar=Bar)
+    await downloader.recheckAllVoices(bar=Bar, _spinner=Spinner)
     # await downloader.recheckAllVoices()
     # servant = await ServantVoices.load(16)
     # servant.buildVoiceLinesDict(False)
