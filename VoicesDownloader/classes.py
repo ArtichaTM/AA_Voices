@@ -31,7 +31,7 @@ __all__ = (
 logger = getLogger('AA_voices_downloader')
 
 
-def touch_file(path: Path):
+async def update_modified_date(path: Path):
     assert path.exists()
     os.utime(path, (path.lstat().st_birthtime, time()))
 
@@ -225,29 +225,32 @@ class Downloader:
     async def recheckAllVoices(
             self,
             bar: type[Bar] | None = None,
-            bar_arguments: dict | None = None
+            bar_arguments: dict | None = None,
+            _spinner: type[Spinner] | None= None
         ) -> None:
         logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         assert bar is None or issubclass(bar, Bar)
         assert bar_arguments is None or isinstance(bar, dict)
         if bar_arguments is None: bar_arguments = dict()
 
-        spinner = Spinner(message='Updating info')
-        thread = threading.Thread(
-            name='Spinner',
-            daemon=True,
-            target=self._spinner_thread,
-            args=(spinner,)
-        )
-        thread.start()
+        if _spinner is not None:
+            spinner = _spinner(message='Updating info ')
+            thread = threading.Thread(
+                name='Spinner',
+                daemon=True,
+                target=self._spinner_thread,
+                args=(spinner,)
+            )
+            thread.start()
 
         await self.updateInfo()
-        spinner.message = 'Updating Basic Servant '
+        if _spinner is not None: spinner.message = 'Updating Basic Servant '
         await self.updateBasicServant()
-        spinner.message = 'Finished '
-        self.animation_bool = False
-        thread.join()
-        spinner.finish()
+        if _spinner is not None:
+            spinner.message = 'Finished '
+            self.animation_bool = False
+            thread.join()
+            spinner.finish()
         try:
             for i in range(1, self.basic_servant.collectionNoMax):
                 voices = await ServantVoices.load(i)
@@ -284,19 +287,17 @@ class VoiceLine:
         assert isinstance(values['svtVoiceType'], str)
 
         self.dictionary = values
-        self.dictionary['name'] = self.dictionary['name']\
-            .replace('{', '')\
-            .replace('}', '')\
-            .replace(':', ' -')\
-            .replace('?', ' -')\
-            .strip()
-        self.dictionary['overwriteName'] = self.dictionary['overwriteName']\
-            .replace('{', '')\
-            .replace('}', '')\
-            .replace(':', ' -')\
-            .replace('?', ' -')\
-            .strip()
         for i in ('name', 'overwriteName'):
+            self.dictionary[i] = self.dictionary[i]\
+                .replace('{', '')\
+                .replace('}', '')\
+                .replace(':', ' -')\
+                .replace('?', ' -')\
+                .replace(' ☆', ' ')\
+                .replace('☆ ', ' ')\
+                .replace('☆', '')\
+                .replace('\n', ' ')\
+                .strip()
             if '\r' in self.dictionary[i]:
                 self.dictionary[i] = self.dictionary[i][:self.dictionary[i].find('\r')]
 
@@ -437,10 +438,6 @@ class VoiceLine:
         self.concat_mp3(paths)
         atexit.unregister(self._leftovers_delete)
 
-    async def touch(self) -> None:
-        assert self.loaded
-        touch_file(self.path)
-
 
 class BasicServant:
     __slots__ = ('__dict__', 'values')
@@ -515,7 +512,9 @@ class ServantVoices:
                 await cls._updateJSON(id=id)
             break
 
-        return ServantVoices(id=id)
+        sv = ServantVoices(id=id)
+        asyncio.create_task(update_modified_date(sv.path_json))
+        return sv
 
     def buildVoiceLinesDict(self, fill_all_ascensions: bool = False) -> None:
         if not self.path_json.exists():
@@ -583,8 +582,9 @@ class ServantVoices:
                 logger.info(f'S{self.id}: New JSON different from old')
                 self.path_voices.unlink(missing_ok=True)
             else:
-                touch_file(self.path)
+                asyncio.create_task(update_modified_date(self.path))
         logger.debug(f'Started updating {self.id} voices')
+        self.path_voices.mkdir(parents=False, exist_ok=True)
         if bar is not None:
             voice_lines_amount = self.amount
             bar.max = voice_lines_amount
@@ -599,12 +599,13 @@ class ServantVoices:
                             bar.next()
                             bar.message = f"{voice_line.ascension.name}: {voice_line.name: <30}"[:36]
                         if voice_line.loaded:
-                            await voice_line.touch()
                             continue
                         await voice_line.download()
+                        asyncio.create_task(update_modified_date(self.path))
         if bar is not None:
             bar.message = f'Servant {self.id: >3} up-to-date'
             bar.suffix = '%(index)d/%(max)d'
             bar.update()
             bar.finish()
+        asyncio.create_task(update_modified_date(self.path_voices))
         logger.debug(f'Finished updating {self.id} voices')
