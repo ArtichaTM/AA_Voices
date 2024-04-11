@@ -591,6 +591,7 @@ class ServantVoices:
             bar.suffix = '%(index)d/%(max)d %(eta)ds'
             bar.message = 'Loading Servant info'
             bar.update()
+        downloaded_counter = 0
         for ascension_values in self.voice_lines.values():
             for category_values in ascension_values.values():
                 for type_values in category_values.values():
@@ -600,11 +601,14 @@ class ServantVoices:
                             bar.message = f"{voice_line.ascension.name}: {voice_line.name: <30}"[:36]
                         if voice_line.loaded:
                             continue
+                        downloaded_counter += 1
                         await voice_line.download()
                         asyncio.create_task(update_modified_date(self.path))
         if bar is not None:
             bar.message = f'Servant {self.id: >3} up-to-date'
             bar.suffix = '%(index)d/%(max)d'
+            if downloaded_counter:
+                bar.suffix = bar.suffix.ljust(7) + f' (downloaded: {downloaded_counter})'
             bar.update()
             bar.finish()
         asyncio.create_task(update_modified_date(self.path_voices))
