@@ -245,6 +245,9 @@ class VoiceLine:
         including dash
         Also, some events starts with "Revival -", so we must detect this
         """
+        bracket_index = self.dictionary['overwriteName'].find('(')
+        if bracket_index != -1:
+            self.dictionary['overwriteName'] = self.dictionary['overwriteName'][:bracket_index]
         self.dictionary['overwriteName'] = '/'.join(
             i.strip() for i in self.dictionary['overwriteName'].split(' - ')
         )
@@ -448,6 +451,7 @@ class ServantVoices:
         data: dict = loads(self.path_json.read_text(encoding='utf-8'))
         output: ANNOTATION_VOICES = dict()
         self.amount = 0
+        name_counters: dict[VoiceLineCategory, int] = dict()
         for voices in data['profile']['voices']:
             type = VoiceLineCategory.fromString(voices['type'])
             ascension = list(Ascension)[voices['voicePrefix']]
@@ -459,6 +463,13 @@ class ServantVoices:
                 if 'name' not in line:
                     continue
                 name = line['name']
+                if '{0}' in line['overwriteName']:
+                    if name not in name_counters:
+                        name_counters[name] = 0
+                    else:
+                        name_counters[name] += 1
+                    line['overwriteName'] = line['overwriteName']\
+                        .replace('{0}', str(name_counters[name]))
                 if name not in output[ascension][type]:
                     output[ascension][type][name] = []
                 line['svt_id'] = self.id
