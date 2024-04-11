@@ -390,15 +390,27 @@ class VoiceLine:
             '" -c copy '
             f'"{self.filename}"'
         )
-        ret = subprocess.call(
+        p = subprocess.Popen(
             args=command,
             cwd=self.path_folder,
             timeout=2,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
         )
-        if ret != 0: raise FFMPEGException("ffmpeg returned non-zero code")
+        output, err = p.communicate(timeout=10)
+        ret = p.returncode
+        if ret != 0:
+            raise FFMPEGException(
+                "FFMpeg returned non-zero code. Leftovers left untouched. Additional info:"
+                "\n> Command: "  + command +
+                "\n> CWD: " + str(self.path_folder) + 
+                "\n> StdOut:" +
+                output.decode().replace('\n', '\n\t')
+                +
+                '\n> StdErr:' +
+                err.decode().replace('\n', '\n\t')
+            )
 
         for source in source_paths:
             source.unlink()
@@ -436,8 +448,14 @@ class VoiceLine:
                     'This can be caused by program exit with error, or if file created by other process'
                 )
             await downloader.download(voice_url, paths[-1])
-        self.concat_mp3(paths)
-        atexit.unregister(self._leftovers_delete)
+        try:
+            self.concat_mp3(paths)
+        except FFMPEGException:
+            # Unregister leftovers delete
+            atexit.unregister(self._leftovers_delete)
+            raise
+        else:
+            atexit.unregister(self._leftovers_delete)
 
 
 class BasicServant:
