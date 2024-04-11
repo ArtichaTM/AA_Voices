@@ -25,7 +25,7 @@ async def amain():
 
     await downloader.recheckAllVoices(bar=Bar, _spinner=Spinner)
     # await downloader.recheckAllVoices()
-    # servant = await ServantVoices.load(16)
+    # servant = await ServantVoices.load()
     # servant.buildVoiceLinesDict(False)
     # await servant.updateVoices(bar=Bar())
     # await servant.updateVoices()

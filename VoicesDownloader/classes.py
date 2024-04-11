@@ -421,6 +421,7 @@ class VoiceLine:
         logger.info('Unlinked temporary files successfully')
 
     async def download(self) -> None:
+        assert not self.path.exists()
         downloader = Downloader()
         paths: list[Path] = []
         atexit.register(self._leftovers_delete, paths)
@@ -611,5 +612,7 @@ class ServantVoices:
                 bar.suffix = bar.suffix.ljust(7) + f' (downloaded: {downloaded_counter})'
             bar.update()
             bar.finish()
+        if downloaded_counter:
+            logger.info(f"Downloaded {downloaded_counter}/{voice_lines_amount} for servant {self.id}")
         asyncio.create_task(update_modified_date(self.path_voices))
         logger.debug(f'Finished updating {self.id} voices')
