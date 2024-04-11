@@ -196,10 +196,11 @@ class Downloader:
 
         await self.updateInfo()
         await self.updateBasicServant()
-        for i in range(1, self.basic_servant.collectionNoMax):
-            voices = await ServantVoices.load(i)
-            voices.buildVoiceLinesDict(fill_all_ascensions=False)
-            await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)
+        try:
+            for i in range(1, self.basic_servant.collectionNoMax):
+                voices = await ServantVoices.load(i)
+                voices.buildVoiceLinesDict(fill_all_ascensions=False)
+                await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)
         except:
             logger.warning(
                 "Exception during Downloader.recheckAllVoices(). "
@@ -266,23 +267,28 @@ class VoiceLine:
 
     @property
     def servant_id(self) -> int:
+        assert 'svt_id' in self.dictionary
         return self.dictionary['svt_id']
 
     @cached_property
     def ascension(self) -> Ascension:
+        assert 'id' in self.dictionary
         id: str = self.dictionary['id'][0]
         return list(Ascension)[int(id[:id.find('_')])]
 
     @cached_property
     def type(self) -> VoiceLineCategory:
+        assert 'svtVoiceType' in self.dictionary
         return VoiceLineCategory.fromString(self.dictionary['svtVoiceType'])
 
     @cached_property
     def name(self) -> str:
+        assert 'name' in self.dictionary
         return self.dictionary['name']
 
     @cached_property
     def overwriteName(self) -> str:
+        assert 'overwriteName' in self.dictionary
         return self.dictionary['overwriteName']
 
     @cached_property
@@ -306,8 +312,14 @@ class VoiceLine:
     def loaded(self) -> bool:
         return self.path.exists()
 
-    def voiceLinesURL(self) -> Generator[str, None, None]:
+    def _voiceLinesURL(self) -> Generator[str, None, None]:
+        assert 'audioAssets' in self.dictionary
         yield from self.dictionary['audioAssets']
+
+    @property
+    def subtitle(self) -> str:
+        assert 'subtitle' in self.dictionary
+        return self.dictionary['subtitle']
 
     def concat_mp3(
         self,
@@ -339,7 +351,7 @@ class VoiceLine:
             source.unlink()
 
     @staticmethod
-    def leftovers_delete(paths: list[Path]) -> None:
+    def _leftovers_delete(paths: list[Path]) -> None:
         logger.warning('Exception during VoiceLine file download')
         if len(paths) == 0:
             return
@@ -358,8 +370,8 @@ class VoiceLine:
     async def download(self) -> None:
         downloader = Downloader()
         paths: list[Path] = []
-        atexit.register(self.leftovers_delete, paths)
-        for index, voice_url in enumerate(self.voiceLinesURL()):
+        atexit.register(self._leftovers_delete, paths)
+        for index, voice_url in enumerate(self._voiceLinesURL()):
             self.path_folder.mkdir(parents=True, exist_ok=True)
             paths.append(self.path)
             paths[-1] = paths[-1].with_stem(f"{paths[-1].stem}_{index}")
@@ -371,7 +383,7 @@ class VoiceLine:
                 )
             await downloader.download(voice_url, paths[-1])
         self.concat_mp3(paths)
-        atexit.unregister(self.leftovers_delete)
+        atexit.unregister(self._leftovers_delete)
 
     async def touch(self) -> None:
         assert self.loaded
@@ -419,7 +431,7 @@ class ServantVoices:
         return self.path / 'voices'
 
     @classmethod
-    async def get_json(cls, id: int) -> dict:
+    async def _get_json(cls, id: int) -> dict:
         json = await Downloader().request(
             address=f'/nice/NA/servant/{id}',
             params={'lore': 'true'}
@@ -515,7 +527,7 @@ class ServantVoices:
         elif downloader.timestamps['NA'] > self.path.lstat().st_mtime:
             logger.info(f'S{self.id}: folder modified before NA patch')
             current_json = loads(self.path_json.read_text(encoding='utf-8'))
-            new_json = await self.get_json(self.id)
+            new_json = await self._get_json(self.id)
             if current_json != new_json:
                 logger.info(f'S{self.id}: New JSON different from old')
                 self.path_voices.unlink(missing_ok=True)
@@ -528,13 +540,13 @@ class ServantVoices:
             bar.suffix = '%(index)d/%(max)d %(eta)ds'
             bar.message = 'Loading Servant info'
             bar.update()
-        for ascension, ascension_values in self.voice_lines.items():
+        for ascension_values in self.voice_lines.values():
             for category_values in ascension_values.values():
                 for type_values in category_values.values():
                     for voice_line in type_values:
                         if bar is not None:
                             bar.next()
-                            bar.message = f"{ascension.name}: {voice_line.name: <30}"[:36]
+                            bar.message = f"{voice_line.ascension.name}: {voice_line.name: <30}"[:36]
                         if voice_line.loaded:
                             await voice_line.touch()
                             continue
