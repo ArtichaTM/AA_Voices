@@ -685,6 +685,10 @@ class ServantVoices:
                 for type_values in category_values.values():
                     for voice_line in type_values:
                         if bar is not None:
+                            bar.suffix = '%(index)d/%(max)d'
+                            downloaded = f' (downloaded: {downloaded_counter})' if downloaded_counter else ''
+                            skipped = f' (skipped: {self.skipped_amount})' if self.skipped_amount else ''
+                            bar.suffix = bar.suffix.ljust(7) + downloaded + skipped
                             bar.message = (f"{voice_line.ascension.name}: " +
                                 voice_line.name.__format__(f" <{message_size-11}")
                             )[:message_size]
