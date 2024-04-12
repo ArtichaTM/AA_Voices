@@ -422,7 +422,10 @@ class VoiceLine:
             for i in source_paths:
                 try:
                     loaded: dict = json.loads(i.read_bytes())
-                except json.decoder.JSONDecodeError:
+                except (
+                    json.decoder.JSONDecodeError,
+                    UnicodeDecodeError
+                ):
                     continue
                 for source in source_paths:
                     source.unlink()
