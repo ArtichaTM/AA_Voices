@@ -114,10 +114,12 @@ class VoiceLineCategory(IntEnum):
 
 class ExceptionType(IntEnum):
     NP_IN_BATTLE_SECTION = 0
+    SKIP_ON_DOWNLOAD_EXCEPTION = 1
 
 
 MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
 SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
+    66: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, },
     153: {ExceptionType.NP_IN_BATTLE_SECTION, },
     175: {ExceptionType.NP_IN_BATTLE_SECTION, },
     178: {ExceptionType.NP_IN_BATTLE_SECTION, },
@@ -684,7 +686,22 @@ class ServantVoices:
                         if voice_line.loaded:
                             continue
                         downloaded_counter += 1
-                        await voice_line.download()
+                        try:
+                            await voice_line.download()
+                        except DownloadException:
+                            if ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION\
+                                not in\
+                                SERVANT_EXCEPTIONS[self.id]:
+                                raise
+                            self.skipped_amount += 1
+                            logger.info(
+                                f"S{self.id}: Skipping VoiceLine {voice_line.path} due to"
+                                f" {ExceptionType.__name__}."
+                                f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
+                                " == true"
+                            )
+                            continue
+
                         asyncio.create_task(update_modified_date(self.path))
         if bar is not None:
             bar.message = f'Servant {self.id: >3} up-to-date'
