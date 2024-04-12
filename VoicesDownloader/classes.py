@@ -332,6 +332,7 @@ class VoiceLine:
         splits = [i.strip() for i in self.dictionary['overwriteName'].split(' - ')]
         self.dictionary['path_add'] = '/'.join(splits[:-1])
         self.dictionary['overwriteName'] = splits[-1]
+        self.dictionary['overwriteName'] = self.dictionary['overwriteName'].replace('/', ' ')
 
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
