@@ -704,6 +704,7 @@ class ServantVoices:
                                 SERVANT_EXCEPTIONS.get(self.id, set()):
                                 raise
                             self.skipped_amount += 1
+                            downloaded_counter  -= 1
                             logger.warning(
                                 f"S{self.id}: Skipping VoiceLine {voice_line.path} due to"
                                 f" {ExceptionType.__name__}."
