@@ -11,6 +11,7 @@ from enum import IntEnum
 from time import time
 from time import sleep
 from pathlib import Path
+import shutil
 from functools import cached_property
 
 import aiohttp
@@ -613,7 +614,7 @@ class ServantVoices:
             new_json = await self._get_json(self.id)
             if current_json != new_json:
                 logger.info(f'S{self.id}: New JSON different from old')
-                self.path_voices.unlink(missing_ok=True)
+                shutil.rmtree(self.path_voices)
             else:
                 asyncio.create_task(update_modified_date(self.path))
         logger.debug(f'Started updating {self.id} voices')
