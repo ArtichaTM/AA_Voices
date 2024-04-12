@@ -1,5 +1,6 @@
 from io import StringIO
 from typing import Any, Generator, Optional
+import re
 import asyncio
 import threading
 import atexit
@@ -316,10 +317,8 @@ class VoiceLine:
                 .replace(' ☆', ' ')\
                 .replace('☆ ', ' ')\
                 .replace('☆', '')\
-                .replace('\n', ' ')\
+                .replace('\r', '')\
                 .strip()
-            if '\r' in self.dictionary[i]:
-                self.dictionary[i] = self.dictionary[i][:self.dictionary[i].find('\r')]
 
         """
         In events types, like
@@ -331,7 +330,11 @@ class VoiceLine:
         bracket_index = self.dictionary['overwriteName'].find('(')
         if bracket_index != -1:
             self.dictionary['overwriteName'] = self.dictionary['overwriteName'][:bracket_index]
-        splits = [i.strip() for i in self.dictionary['overwriteName'].split(' - ')]
+        splits = [
+            i.strip() for i in self.dictionary['overwriteName']
+                .replace('\n', ' - ')
+                .split(' - ')
+        ]
         self.dictionary['path_add'] = '/'.join(splits[:-1])
         self.dictionary['overwriteName'] = splits[-1]
         self.dictionary['overwriteName'] = self.dictionary['overwriteName'].replace('/', ' ')
