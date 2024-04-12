@@ -112,8 +112,20 @@ class VoiceLineCategory(IntEnum):
                 raise Exception(f"There's no such category: \"{value}\"")
 
 
-MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
+class ExceptionType(IntEnum):
+    NP_IN_BATTLE_SECTION = 0
 
+
+MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
+SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
+    153: {ExceptionType.NP_IN_BATTLE_SECTION, },
+    175: {ExceptionType.NP_IN_BATTLE_SECTION, },
+    178: {ExceptionType.NP_IN_BATTLE_SECTION, },
+    179: {ExceptionType.NP_IN_BATTLE_SECTION, },
+    182: {ExceptionType.NP_IN_BATTLE_SECTION, },
+    188: {ExceptionType.NP_IN_BATTLE_SECTION, },
+    189: {ExceptionType.NP_IN_BATTLE_SECTION, }
+}
 
 class Downloader:
     __slots__ = (
@@ -412,6 +424,8 @@ class VoiceLine:
                     loaded: dict = json.loads(i.read_bytes())
                 except json.decoder.JSONDecodeError:
                     continue
+                for source in source_paths:
+                    source.unlink()
                 raise DownloadException(
                     f"File {self.path} couldn't be downloaded due to error received from AA:\n"
                     + json.dumps(loaded, indent=4)
@@ -491,7 +505,7 @@ ANNOTATION_VOICE_CATEGORY = dict[VoiceLineCategory, dict[str, list[VoiceLine]]]
 ANNOTATION_VOICES = dict[Ascension, ANNOTATION_VOICE_CATEGORY] | None
 class ServantVoices:
     __slots__ = (
-        'id', 'voice_lines', 'amount',
+        'id', 'voice_lines', 'amount', 'skipped_amount'
     )
 
     def __init__(self, id: int):
@@ -556,6 +570,7 @@ class ServantVoices:
         data: dict = json.loads(self.path_json.read_text(encoding='utf-8'))
         output: ANNOTATION_VOICES = dict()
         self.amount = 0
+        self.skipped_amount = 0
         name_counters: dict[VoiceLineCategory, int] = dict()
         for voices in data['profile']['voices']:
             type = VoiceLineCategory.fromString(voices['type'])
@@ -590,6 +605,22 @@ class ServantVoices:
                 output[ascension_str] = output[target_ascension]
 
         self.voice_lines = output
+
+        exceptions = SERVANT_EXCEPTIONS.get(self.id, set())
+        if exceptions:
+            if ExceptionType.NP_IN_BATTLE_SECTION in exceptions:
+                for ascension_values in self.voice_lines.values():
+                    category = ascension_values[VoiceLineCategory.Battle]
+                    to_pop = []
+                    for name, voice_lines in category.items():
+                        if all((
+                            'Noble Phantasm' in name,
+                            'Card' not in name
+                        )):
+                            to_pop.append(name)
+                            self.amount -= 1
+                            self.skipped_amount += 1
+                    for name in to_pop: category.pop(name)
 
     def loadedVoices(self) -> Generator[VoiceLine, None, None]:
         assert isinstance(self.voice_lines, dict)
@@ -631,7 +662,9 @@ class ServantVoices:
                 for type_values in category_values.values():
                     for voice_line in type_values:
                         if bar is not None:
-                            bar.message = f"{voice_line.ascension.name}: {voice_line.name: <30}"[:36]
+                            bar.message = (f"{voice_line.ascension.name}: " +
+                                voice_line.name.__format__(f" <{message_size-11}")
+                            )[:message_size]
                             bar.next()
                         if voice_line.loaded:
                             continue
@@ -641,11 +674,14 @@ class ServantVoices:
         if bar is not None:
             bar.message = f'Servant {self.id: >3} up-to-date'
             bar.suffix = '%(index)d/%(max)d'
-            if downloaded_counter:
-                bar.suffix = bar.suffix.ljust(7) + f' (downloaded: {downloaded_counter})'
+            downloaded = f' (downloaded: {downloaded_counter})' if downloaded_counter else ''
+            skipped = f' (skipped: {self.skipped_amount})' if self.skipped_amount else ''
+            bar.suffix = bar.suffix.ljust(7) + downloaded + skipped
             bar.update()
             bar.finish()
         if downloaded_counter:
-            logger.info(f"Downloaded {downloaded_counter}/{voice_lines_amount} for servant {self.id}")
+            logger.info(f"Downloaded {downloaded_counter}/{voice_lines_amount} "
+                f"for servant {self.id} (skipped {self.skipped_amount})"
+            )
         asyncio.create_task(update_modified_date(self.path_voices))
         logger.debug(f'Finished updating {self.id} voices')
