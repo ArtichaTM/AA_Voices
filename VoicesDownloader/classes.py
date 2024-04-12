@@ -329,9 +329,9 @@ class VoiceLine:
         bracket_index = self.dictionary['overwriteName'].find('(')
         if bracket_index != -1:
             self.dictionary['overwriteName'] = self.dictionary['overwriteName'][:bracket_index]
-        self.dictionary['overwriteName'] = '/'.join(
-            i.strip() for i in self.dictionary['overwriteName'].split(' - ')
-        )
+        splits = [i.strip() for i in self.dictionary['overwriteName'].split(' - ')]
+        self.dictionary['path_add'] = '/'.join(splits[:-1])
+        self.dictionary['overwriteName'] = splits[-1]
 
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
@@ -369,15 +369,21 @@ class VoiceLine:
     @cached_property
     def path_folder(self) -> Path:
         return Downloader.SERVANTS_FOLDER / str(self.servant_id) / Downloader.VOICES_FOLDER_NAME / \
-            self.ascension.name / self.type.name / self.anyName
+            self.ascension.name / self.type.name / self.dictionary['path_add']
 
     @cached_property
     def filename(self) -> str:
-        return f"{self.name if self.name else 'file'}.mp3"
+        index = '' if self.index == -1 else f" {self.index+1}"
+        return f"{self.anyName}{index}.mp3"
 
     @cached_property
     def path(self) -> Path:
         return self.path_folder / self.filename
+
+    @cached_property
+    def index(self) -> int:
+        assert isinstance(self.dictionary['_index'], int)
+        return self.dictionary['_index']
 
     @property
     def loaded(self) -> bool:
@@ -585,7 +591,7 @@ class ServantVoices:
             for line in voices['voiceLines']:
                 if 'name' not in line:
                     continue
-                name = line['name']
+                name = line['overwriteName'] if line['overwriteName'] else line['name']
                 if '{0}' in line['overwriteName']:
                     if name not in name_counters:
                         name_counters[name] = 0
@@ -595,6 +601,11 @@ class ServantVoices:
                         .replace('{0}', str(name_counters[name]))
                 if name not in output[ascension][type]:
                     output[ascension][type][name] = []
+                    line['_index'] = -1
+                else:
+                    output[ascension][type][name][-1]\
+                        .dictionary['_index'] = len(output[ascension][type][name])-1
+                    line['_index'] = len(output[ascension][type][name])
                 line['svt_id'] = self.id
                 output[ascension][type][name].append(VoiceLine(line))
                 self.amount += 1
