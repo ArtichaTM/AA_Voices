@@ -160,12 +160,12 @@ class Downloader:
         atexit.register(self.destroy)
 
     def _spinner_thread(self, spinner: Spinner):
-        logger.info("Spinner thread started")
+        logger.debug("Spinner thread started")
         self.animation_bool = True
         while self.animation_bool:
             spinner.next()
             sleep(self.animation_speed)
-        logger.info("Spinner thread ended")
+        logger.debug("Spinner thread ended")
 
     async def updateInfo(self) -> None:
         info = await self.request_json('/info')
@@ -637,6 +637,9 @@ class ServantVoices:
                             to_pop.append(name)
                             self.amount -= 1
                             self.skipped_amount += 1
+                            logger.warning(
+                                f"S{self.id}: Skipped {self.path} because NP card broken"
+                            )
                     for name in to_pop: category.pop(name)
 
     def loadedVoices(self) -> Generator[VoiceLine, None, None]:
@@ -694,7 +697,7 @@ class ServantVoices:
                                 SERVANT_EXCEPTIONS[self.id]:
                                 raise
                             self.skipped_amount += 1
-                            logger.info(
+                            logger.warning(
                                 f"S{self.id}: Skipping VoiceLine {voice_line.path} due to"
                                 f" {ExceptionType.__name__}."
                                 f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
