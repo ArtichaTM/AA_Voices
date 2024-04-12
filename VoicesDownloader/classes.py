@@ -694,7 +694,7 @@ class ServantVoices:
                         except DownloadException:
                             if ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION\
                                 not in\
-                                SERVANT_EXCEPTIONS[self.id]:
+                                SERVANT_EXCEPTIONS.get(self.id, set()):
                                 raise
                             self.skipped_amount += 1
                             logger.warning(
