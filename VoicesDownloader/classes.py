@@ -81,6 +81,7 @@ class VoiceLineCategory(IntEnum):
     EventJoin = 9
     Guide = 10
     EventTowerReward = 11
+    EventDailyPoint = 12
 
     @classmethod
     def fromString(cls, value: str) -> 'VoiceLineCategory':
@@ -109,6 +110,8 @@ class VoiceLineCategory(IntEnum):
                 return cls.Guide
             case 'eventTowerReward':
                 return cls.EventTowerReward
+            case 'eventDailyPoint':
+                return cls.EventDailyPoint
             case _:
                 raise Exception(f"There's no such category: \"{value}\"")
 
@@ -358,9 +361,8 @@ class VoiceLine:
 
     @cached_property
     def ascension(self) -> Ascension:
-        assert 'id' in self.dictionary
-        id: str = self.dictionary['id'][0]
-        return list(Ascension)[int(id[:id.find('_')])]
+        assert 'ascension' in self.dictionary
+        return self.dictionary['ascension']
 
     @cached_property
     def type(self) -> VoiceLineCategory:
@@ -604,6 +606,7 @@ class ServantVoices:
             if type not in output[ascension]:
                 output[ascension][type] = dict()
             for line in voices['voiceLines']:
+                line['ascension'] = ascension
                 if 'name' not in line:
                     continue
                 name = line['overwriteName'] if line['overwriteName'] else line['name']
