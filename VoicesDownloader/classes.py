@@ -135,7 +135,8 @@ class Downloader:
         'delay', 'maximum_retries', 'timestamps', 'last_request',
         'session', 'basic_servant', 'animation_bool', 'animation_speed'
     )
-    timestamps: dict[str, float]
+    timestamps: dict[str, float] | None
+    basic_servant: 'BasicServant | None'
     _instance: Optional['Downloader'] = None
     API_SERVER: str = r'https://api.atlasacademy.io'
     SERVANTS_FOLDER = MAINDIR / 'Servants'
@@ -158,6 +159,8 @@ class Downloader:
         self.session = ClientSession()
         self.animation_bool = False
         self.animation_speed = 0.5
+        self.timestamps = None
+        self.basic_servant = None
         atexit.register(self.destroy)
 
     def _spinner_thread(self, spinner: Spinner):
@@ -169,15 +172,19 @@ class Downloader:
         logger.debug("Spinner thread ended")
 
     async def updateInfo(self) -> None:
+        if self.timestamps is not None:
+            return
         info = await self.request_json('/info')
         assert isinstance(info, dict)
         self.timestamps = {region: data['timestamp'] for region, data in info.items() if region in {'NA', 'JP'}}
         assert len(self.timestamps) > 0
 
     async def updateBasicServant(self) -> None:
+        if self.basic_servant is not None:
+            return
         json = await self.request_json('/export/NA/basic_servant.json')
         assert isinstance(json, list)
-        self.basic_servant: BasicServant = BasicServant(json)
+        self.basic_servant = BasicServant(json)
 
     async def request(self, address: str, params: dict | None = dict()) -> bytes:
         assert isinstance(self.session, ClientSession)
@@ -660,6 +667,7 @@ class ServantVoices:
             raise NoVoiceLines("Trying to updateVoices before buildVoiceLinesDict() called")
         if not hasattr(downloader, 'timestamps'):
             await downloader.updateInfo()
+        assert isinstance(downloader.timestamps, dict)
         if not self.path_json.exists():
             logger.exception(f"S{self.id}: JSON doesn't exist, but must exist")
         elif downloader.timestamps['NA'] > self.path.lstat().st_mtime:
