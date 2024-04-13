@@ -325,7 +325,7 @@ class VoiceLine:
         assert 'svtVoiceType' in values
         assert isinstance(values['name'], str)
         assert isinstance(values['overwriteName'], str)
-        assert isinstance(values['svtVoiceType'], str)
+        assert isinstance(values['svtVoiceType'], VoiceLineCategory)
 
         self.dictionary = values
         for i in ('name', 'overwriteName'):
@@ -374,7 +374,8 @@ class VoiceLine:
     @cached_property
     def type(self) -> VoiceLineCategory:
         assert 'svtVoiceType' in self.dictionary
-        return VoiceLineCategory.fromString(self.dictionary['svtVoiceType'])
+        assert isinstance(self.dictionary['svtVoiceType'], VoiceLineCategory)
+        return self.dictionary['svtVoiceType']
 
     @cached_property
     def name(self) -> str:
@@ -614,6 +615,7 @@ class ServantVoices:
                 output[ascension][type] = dict()
             for line in voices['voiceLines']:
                 line['ascension'] = ascension
+                line['svtVoiceType'] = type
                 if 'name' not in line:
                     continue
                 name = line['overwriteName'] if line['overwriteName'] else line['name']
