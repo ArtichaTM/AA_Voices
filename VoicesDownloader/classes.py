@@ -670,7 +670,7 @@ class ServantVoices:
         downloader = Downloader()
         if self.voice_lines is None:
             raise NoVoiceLines("Trying to updateVoices before buildVoiceLinesDict() called")
-        if not hasattr(downloader, 'timestamps'):
+        if downloader.timestamps is None:
             await downloader.updateInfo()
         assert isinstance(downloader.timestamps, dict)
         if not self.path_json.exists():
