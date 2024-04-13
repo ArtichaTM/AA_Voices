@@ -25,10 +25,14 @@ async def amain():
 
     await downloader.recheckAllVoices(bar=Bar, _spinner=Spinner)
     # await downloader.recheckAllVoices()
-    # servant = await ServantVoices.load()
+    # await downloader._print_all_conflicts()
+
+    # from classes import ServantVoices
+    # servant = await ServantVoices.load(142)
     # servant.buildVoiceLinesDict(False)
     # await servant.updateVoices(bar=Bar())
     # await servant.updateVoices()
+    # servant._print_conflicts()
 
 def main() -> None:
     logger = logging.getLogger('AA_voices_downloader')

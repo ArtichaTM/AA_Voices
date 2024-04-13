@@ -174,6 +174,14 @@ class Downloader:
             sleep(self.animation_speed)
         logger.debug("Spinner thread ended")
 
+    async def _print_all_conflicts(self) -> None:
+        await self.updateBasicServant()
+        assert isinstance(self.basic_servant, BasicServant)
+        for i in range(1, self.basic_servant.collectionNoMax):
+            voices = await ServantVoices.load(i)
+            voices.buildVoiceLinesDict(fill_all_ascensions=False)
+            voices._print_conflicts()
+
     async def updateInfo(self) -> None:
         if self.timestamps is not None:
             return
@@ -657,14 +665,43 @@ class ServantVoices:
                             )
                     for name in to_pop: category.pop(name)
 
-    def loadedVoices(self) -> Generator[VoiceLine, None, None]:
+    def allVoices(self) -> Generator[VoiceLine, None, None]:
         assert isinstance(self.voice_lines, dict)
         for ascension_values in self.voice_lines.values():
             for category_values in ascension_values.values():
                 for type_values in category_values.values():
                     for voice_line in type_values:
-                        if voice_line.loaded:
-                            yield voice_line
+                        yield voice_line
+
+    def loadedVoices(self) -> Generator[VoiceLine, None, None]:
+        for voice_line in self.allVoices():
+            if voice_line.loaded:
+                yield voice_line
+
+    def _iterate_over_conflicts(self) -> Generator[list[VoiceLine], None, None]:
+        if self.voice_lines is None:
+            raise NoVoiceLines("Trying to updateVoices before buildVoiceLinesDict() called")
+        paths: dict[str, list[VoiceLine]] = dict()
+        duplicates: set[str] = set()
+        for voice_line in self.allVoices():
+            path = str(voice_line.path)
+            if path not in paths:
+                paths[path] = [voice_line]
+            else:
+                duplicates.add(path)
+                paths[path].append(voice_line)
+        for duplicate in duplicates:
+            yield paths[duplicate]
+
+
+    def _print_conflicts(self) -> None:
+        for duplicates in self._iterate_over_conflicts():
+            print(
+                f"{self.id: >3}: "
+                f"{', '.join((f"{i.name} ({i.type})".ljust(50) for i in duplicates))}"
+                f" points to one path {duplicates[0].path}"
+            )
+
 
     async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
         downloader = Downloader()
