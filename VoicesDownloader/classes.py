@@ -256,9 +256,9 @@ class Downloader:
             bar_arguments: dict | None = None,
             _spinner: type[Spinner] | None= None
         ) -> None:
-        logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         assert bar is None or issubclass(bar, Bar)
         assert bar_arguments is None or isinstance(bar, dict)
+        logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         if bar_arguments is None: bar_arguments = dict()
 
         if _spinner is not None:
@@ -272,8 +272,10 @@ class Downloader:
             thread.start()
 
         await self.updateInfo()
+        assert isinstance(self.timestamps, dict)
         if _spinner is not None: spinner.message = 'Updating Basic Servant '
         await self.updateBasicServant()
+        assert isinstance(self.basic_servant, BasicServant)
         if _spinner is not None:
             spinner.message = 'Finished '
             self.animation_bool = False
