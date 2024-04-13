@@ -330,14 +330,16 @@ class VoiceLine:
         self.dictionary = values
         for i in ('name', 'overwriteName'):
             self.dictionary[i] = self.dictionary[i]\
+                .replace(' \r\n- ', ' - ')\
+                .replace('\r\n', ' - ')\
+                .replace('\r', ' ')\
                 .replace('{', '')\
                 .replace('}', '')\
+                .replace('"', '_')\
+                .replace("'", '_')\
                 .replace(':', ' -')\
                 .replace('?', ' -')\
-                .replace(' ☆', ' ')\
-                .replace('☆ ', ' ')\
                 .replace('☆', '')\
-                .replace('\r', '')\
                 .strip()
 
         """
@@ -347,9 +349,6 @@ class VoiceLine:
         including dash
         Also, some events starts with "Revival -", so we must detect this
         """
-        bracket_index = self.dictionary['overwriteName'].find('(')
-        if bracket_index != -1:
-            self.dictionary['overwriteName'] = self.dictionary['overwriteName'][:bracket_index]
         splits = [
             i.strip() for i in self.dictionary['overwriteName']
                 .replace('\n', ' - ')
