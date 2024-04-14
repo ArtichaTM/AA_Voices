@@ -744,7 +744,7 @@ class ServantVoices:
                             bar.message = (f"{voice_line.ascension.name}: " +
                                 voice_line.name.__format__(f" <{message_size-11}")
                             )[:message_size]
-                            bar.next()
+                            bar.index += 1
                         if voice_line.loaded:
                             continue
                         downloaded_counter += 1
@@ -763,7 +763,8 @@ class ServantVoices:
                                 f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
                                 " == true"
                             )
-                            continue
+                        if bar is not None:
+                            bar.update()
 
                         asyncio.create_task(update_modified_date(self.path))
         if bar is not None:
