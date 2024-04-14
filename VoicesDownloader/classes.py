@@ -123,15 +123,16 @@ class ExceptionType(IntEnum):
 
 MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
 SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
-    66: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, },
-    153: {ExceptionType.NP_IN_BATTLE_SECTION, },
-    175: {ExceptionType.NP_IN_BATTLE_SECTION, },
-    177: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, },
-    178: {ExceptionType.NP_IN_BATTLE_SECTION, },
-    179: {ExceptionType.NP_IN_BATTLE_SECTION, },
-    182: {ExceptionType.NP_IN_BATTLE_SECTION, },
-    188: {ExceptionType.NP_IN_BATTLE_SECTION, },
-    189: {ExceptionType.NP_IN_BATTLE_SECTION, }
+    66: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
+    , 153: {ExceptionType.NP_IN_BATTLE_SECTION, }
+    , 175: {ExceptionType.NP_IN_BATTLE_SECTION, }
+    , 177: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
+    , 178: {ExceptionType.NP_IN_BATTLE_SECTION, }
+    , 179: {ExceptionType.NP_IN_BATTLE_SECTION, }
+    , 182: {ExceptionType.NP_IN_BATTLE_SECTION, }
+    , 188: {ExceptionType.NP_IN_BATTLE_SECTION, }
+    , 189: {ExceptionType.NP_IN_BATTLE_SECTION, }
+    , 205: {ExceptionType.NP_IN_BATTLE_SECTION, }
 }
 
 class Downloader:
