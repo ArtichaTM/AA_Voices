@@ -1,5 +1,13 @@
 {
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.autoImportCompletions": false,
-    "files.watcherInclude": [ "log.txt" ]
+    "files.watcherInclude": [
+        "log.txt"
+    ],
+    "cSpell.words": [
+        "groeth",
+        "levelname",
+        "MAINDIR",
+        "rapidoc"
+    ]
 }
