@@ -729,14 +729,14 @@ class ServantVoices:
     """ Container of VoiceLine-s"""
     __slots__ = (
         'collectionNo', 'voice_lines', 'amount',
-        'skipped_amount', 'dictionary', 'name_overwrites'
+        'skipped_amount', '_dictionary', '_name_overwrites'
     )
 
     def __init__(self, collectionNo: int):
         self.collectionNo: int = collectionNo
         self.voice_lines: ANNOTATION_VOICES = None
-        self.name_overwrites: dict[Ascension, str] | None = None
-        self.dictionary: dict | None = None
+        self._name_overwrites: dict[Ascension, str] | None = None
+        self._dictionary: dict | None = None
 
     def __repr__(self) -> str:
         return f"<Svt {self.collectionNo}" + (' with voice lines' if self.voice_lines else '') + '>'
@@ -757,9 +757,9 @@ class ServantVoices:
         return self.path / 'voices'
 
     def name(self, ascension: Ascension) -> str:
-        assert isinstance(self.dictionary, dict)
-        assert isinstance(self.name_overwrites, dict)
-        return self.name_overwrites.get(ascension, self.dictionary['name'])
+        assert isinstance(self._dictionary, dict)
+        assert isinstance(self._name_overwrites, dict)
+        return self._name_overwrites.get(ascension, self._dictionary['name'])
 
     @classmethod
     async def _get_json(cls, collectionNo: int) -> dict:
@@ -815,26 +815,26 @@ class ServantVoices:
         """
         if not self.path_json.exists():
             raise RuntimeError("Load servants via ServantVoices.load() classmethod")
-        self.dictionary: dict | None = json.loads(self.path_json.read_text(encoding='utf-8'))
-        assert isinstance(self.dictionary, dict)
+        self._dictionary: dict | None = json.loads(self.path_json.read_text(encoding='utf-8'))
+        assert isinstance(self._dictionary, dict)
 
-        assert 'ascensionAdd' in self.dictionary
-        assert isinstance(self.dictionary['ascensionAdd'], dict)
-        assert 'overWriteServantName' in self.dictionary['ascensionAdd']
-        assert isinstance(self.dictionary['ascensionAdd']['overWriteServantName'], dict)
-        assert self.name_overwrites is None
-        self.name_overwrites = dict()
+        assert 'ascensionAdd' in self._dictionary
+        assert isinstance(self._dictionary['ascensionAdd'], dict)
+        assert 'overWriteServantName' in self._dictionary['ascensionAdd']
+        assert isinstance(self._dictionary['ascensionAdd']['overWriteServantName'], dict)
+        assert self._name_overwrites is None
+        self._name_overwrites = dict()
         for type in ('ascension', 'costume'):
-            for number, overwrite_name in self.dictionary['ascensionAdd']['overWriteServantName'][type].items():
+            for number, overwrite_name in self._dictionary['ascensionAdd']['overWriteServantName'][type].items():
                 assert isinstance(number, str)
                 assert isinstance(overwrite_name, str)
-                self.name_overwrites[Ascension(int(number))] = overwrite_name
+                self._name_overwrites[Ascension(int(number))] = overwrite_name
 
         output: ANNOTATION_VOICES = dict()
         self.amount = 0
         self.skipped_amount = 0
         name_counters: dict[VoiceLineCategory, int] = dict()
-        for voices in self.dictionary['profile']['voices']:
+        for voices in self._dictionary['profile']['voices']:
             type = VoiceLineCategory.fromString(voices['type'])
             ascension = list(Ascension)[voices['voicePrefix']]
             if ascension not in output:
@@ -867,7 +867,7 @@ class ServantVoices:
                 self.amount += 1
 
         if fill_all_ascensions:
-            ascensionAdd = self.dictionary['ascensionAdd']['voicePrefix']
+            ascensionAdd = self._dictionary['ascensionAdd']['voicePrefix']
             for ascension_str, target_ascension in ascensionAdd['ascension'].items():
                 ascension_str: Ascension = list(Ascension)[int(ascension_str)]
                 target_ascension: Ascension = list(Ascension)[target_ascension]
