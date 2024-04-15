@@ -4,16 +4,14 @@ import threading
 import atexit
 import os
 import json
-from logging import getLogger
 import subprocess
+from logging import getLogger
 from enum import IntEnum
-from time import time
-from time import sleep
+from time import time, sleep
 from pathlib import Path
 import shutil
 
 import aiohttp
-from aiohttp import ClientSession
 import aiohttp.client_exceptions
 from progress.bar import Bar
 from progress.spinner import Spinner
@@ -224,7 +222,7 @@ class Downloader:
         self.delay: float | int = delay
         self.maximum_retries: int = maximum_retries
         self.last_request: float = time()
-        self.session: ClientSession | None = ClientSession()
+        self.session: aiohttp.ClientSession | None = aiohttp.ClientSession()
         self.animation_bool: bool = False
         self.animation_speed: float | int = 0.5
         self.timestamps: dict[str, float] | None = None
@@ -290,7 +288,7 @@ class Downloader:
         :return: bytes received from API. No validation made
         """
         assert self.session is not None, "Instance destroyed"
-        assert isinstance(self.session, ClientSession)
+        assert isinstance(self.session, aiohttp.ClientSession)
         assert isinstance(address, str)
         if params is not None:
             assert isinstance(params, dict)
@@ -349,7 +347,7 @@ class Downloader:
         :param params: Parameters passed to request()
         """
         assert self.session is not None, "Instance destroyed"
-        assert isinstance(self.session, ClientSession)
+        assert isinstance(self.session,aiohttp.ClientSession)
         assert isinstance(address, str)
         assert address.startswith('/') or address.startswith('https://static.atlasacademy.io'),\
             f"Address {address} request data from unknown site"
@@ -417,7 +415,7 @@ class Downloader:
 
     def destroy(self) -> None:
         """ Deletes current instance """
-        assert isinstance(self.session, ClientSession)
+        assert isinstance(self.session, aiohttp.ClientSession)
         asyncio.run(self.session.close())
         self.session = None
         type(self)._instance = None
