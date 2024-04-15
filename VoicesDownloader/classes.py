@@ -13,8 +13,10 @@ import shutil
 
 import aiohttp
 import aiohttp.client_exceptions
+import eyed3.id3
 from progress.bar import Bar
 from progress.spinner import Spinner
+import eyed3
 
 __all__ = (
     'NoVoiceLines',
@@ -182,7 +184,7 @@ class PropertyOneCall[T]:
         prop._name = self._name
         return prop
 
-
+ALBUM_NAME = 'Fate: Grand Order Servants'
 MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
 SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
     66: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
@@ -475,6 +477,7 @@ class VoiceLine:
         self.dictionary['path_add'] = '/'.join(splits[:-1])
         self.dictionary['overwriteName'] = splits[-1]
         self.dictionary['overwriteName'] = self.dictionary['overwriteName'].replace('/', ' ')
+        self.dictionary['subtitle'] = self.dictionary['subtitle'].split[']'][-1]
 
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
@@ -547,6 +550,26 @@ class VoiceLine:
         """ Iterator over URLs to voice line parts"""
         assert 'audioAssets' in self.dictionary
         yield from self.dictionary['audioAssets']
+
+    async def metadata_update(self) -> None:
+        downloader = Downloader()
+        _d3: eyed3.AudioFile | None = eyed3.load(str(self.path))
+
+        if downloader.basic_servant is None:
+            await downloader.updateBasicServant()
+        assert isinstance(downloader.basic_servant, BasicServant)
+        assert _d3 is not None
+        assert isinstance(_d3.tag, eyed3.id3.tag.Tag)
+        assert _d3.tag.comments is not None
+
+        tag = _d3.tag
+        tag.artist = downloader.basic_servant[self.servant_id]['name']
+        tag.album = ALBUM_NAME
+        tag.title = self.name
+        assert tag.comments is not None
+        tag.comments.set(self.subtitle)
+        tag.save()
+
 
     def concat_mp3(
         self,
@@ -657,6 +680,7 @@ class VoiceLine:
             raise
         else:
             atexit.unregister(self._leftovers_delete)
+        asyncio.create_task(self.metadata_update())
 
 
 class BasicServant:
@@ -695,17 +719,17 @@ class ServantVoices:
     def __repr__(self) -> str:
         return f"<Svt {self.collectionNo}" + (' with voice lines' if self.voice_lines else '') + '>'
 
-    @property
+    @PropertyOneCall
     def path(self) -> Path:
         """ Path to servant folder, containing JSON and voices folder"""
         return Downloader.SERVANTS_FOLDER / str(self.collectionNo)
 
-    @property
+    @PropertyOneCall
     def path_json(self) -> Path:
         """ Path to servant JSON """
         return self.path / 'info.json'
 
-    @property
+    @PropertyOneCall
     def path_voices(self) -> Path:
         """ Path to servant voices folder (contains voice lines)"""
         return self.path / 'voices'
