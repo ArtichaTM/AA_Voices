@@ -32,7 +32,7 @@ async def amain():
     # await downloader._print_all_conflicts()
 
     # from classes import ServantVoices
-    # servant = await ServantVoices.load(142)
+    # servant = await ServantVoices.load()
     # servant.buildVoiceLinesDict(False)
     # await servant.updateVoices(bar=Bar())
     # await servant.updateVoices()

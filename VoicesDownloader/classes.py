@@ -148,7 +148,7 @@ class PropertyOneCall[T]:
     def __set_name__(self, owner, name):
         self._name = name
 
-    def __get__(self, obj, objtype=None) -> T:
+    def __get__(self, obj, *_) -> T:
         if self.fget is None:
             raise AttributeError(
                 f'property {self._name!r} of {type(obj).__name__!r} object has no getter'
@@ -443,6 +443,7 @@ class VoiceLine:
         assert 'name' in values
         assert 'overwriteName' in values
         assert 'svtVoiceType' in values
+        assert 'svt_name' in values
         assert isinstance(values['name'], str)
         assert isinstance(values['overwriteName'], str)
         assert isinstance(values['svtVoiceType'], VoiceLineCategory)
@@ -477,7 +478,6 @@ class VoiceLine:
         self.dictionary['path_add'] = '/'.join(splits[:-1])
         self.dictionary['overwriteName'] = splits[-1]
         self.dictionary['overwriteName'] = self.dictionary['overwriteName'].replace('/', ' ')
-        self.dictionary['subtitle'] = self.dictionary['subtitle'].split[']'][-1]
 
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
@@ -486,6 +486,11 @@ class VoiceLine:
     def servant_id(self) -> int:
         assert 'svt_id' in self.dictionary
         return self.dictionary['svt_id']
+
+    @PropertyOneCall
+    def servant_name(self) -> int:
+        assert 'svt_name' in self.dictionary
+        return self.dictionary['svt_name']
 
     @PropertyOneCall
     def ascension(self) -> Ascension:
@@ -544,6 +549,7 @@ class VoiceLine:
     def subtitle(self) -> str:
         """ Text of the voice line [ENG]"""
         assert 'subtitle' in self.dictionary
+        self.dictionary['subtitle'] = self.dictionary['subtitle'].split(']')[-1]
         return self.dictionary['subtitle']
 
     def _voiceLinesURL(self) -> Generator[str, None, None]:
@@ -563,7 +569,7 @@ class VoiceLine:
         assert _d3.tag.comments is not None
 
         tag = _d3.tag
-        tag.artist = downloader.basic_servant[self.servant_id]['name']
+        tag.artist = self.servant_name
         tag.album = ALBUM_NAME
         tag.title = self.name
         assert tag.comments is not None
@@ -710,11 +716,16 @@ ANNOTATION_VOICE_CATEGORY = dict[VoiceLineCategory, dict[str, list[VoiceLine]]]
 ANNOTATION_VOICES = dict[Ascension, ANNOTATION_VOICE_CATEGORY] | None
 class ServantVoices:
     """ Container of VoiceLine-s"""
-    __slots__ = ('collectionNo', 'voice_lines', 'amount', 'skipped_amount')
+    __slots__ = (
+        'collectionNo', 'voice_lines', 'amount',
+        'skipped_amount', 'dictionary', 'name_overwrites'
+    )
 
     def __init__(self, collectionNo: int):
         self.collectionNo: int = collectionNo
         self.voice_lines: ANNOTATION_VOICES = None
+        self.name_overwrites: dict[Ascension, str] | None = None
+        self.dictionary: dict | None = None
 
     def __repr__(self) -> str:
         return f"<Svt {self.collectionNo}" + (' with voice lines' if self.voice_lines else '') + '>'
@@ -734,13 +745,17 @@ class ServantVoices:
         """ Path to servant voices folder (contains voice lines)"""
         return self.path / 'voices'
 
+    def name(self, ascension: Ascension) -> str:
+        assert isinstance(self.dictionary, dict)
+        assert isinstance(self.name_overwrites, dict)
+        return self.name_overwrites.get(ascension, self.dictionary['name'])
+
     @classmethod
     async def _get_json(cls, collectionNo: int) -> dict:
         """ Download and parse current servant JSON info
         :param id: collectionNo of servant
         :type id: int
         :return: parsed JSON
-        :rtype: dict
         """
         json = await Downloader().request_json(
             address=f'/nice/NA/servant/{collectionNo}',
@@ -768,7 +783,6 @@ class ServantVoices:
         :param id: _description_
         :type id: int
         :return: _description_
-        :rtype: ServantVoices
         """
         servant_folder = Downloader.SERVANTS_FOLDER / f"{collectionNo}"
         servant_json_path = servant_folder / 'info.json'
@@ -790,12 +804,26 @@ class ServantVoices:
         """
         if not self.path_json.exists():
             raise RuntimeError("Load servants via ServantVoices.load() classmethod")
-        data: dict = json.loads(self.path_json.read_text(encoding='utf-8'))
+        self.dictionary: dict | None = json.loads(self.path_json.read_text(encoding='utf-8'))
+        assert isinstance(self.dictionary, dict)
+
+        assert 'ascensionAdd' in self.dictionary
+        assert isinstance(self.dictionary['ascensionAdd'], dict)
+        assert 'overWriteServantName' in self.dictionary['ascensionAdd']
+        assert isinstance(self.dictionary['ascensionAdd']['overWriteServantName'], dict)
+        assert self.name_overwrites is None
+        self.name_overwrites = dict()
+        for type in ('ascension', 'costume'):
+            for number, overwrite_name in self.dictionary['ascensionAdd']['overWriteServantName'][type].items():
+                assert isinstance(number, str)
+                assert isinstance(overwrite_name, str)
+                self.name_overwrites[Ascension(int(number))] = overwrite_name
+
         output: ANNOTATION_VOICES = dict()
         self.amount = 0
         self.skipped_amount = 0
         name_counters: dict[VoiceLineCategory, int] = dict()
-        for voices in data['profile']['voices']:
+        for voices in self.dictionary['profile']['voices']:
             type = VoiceLineCategory.fromString(voices['type'])
             ascension = list(Ascension)[voices['voicePrefix']]
             if ascension not in output:
@@ -805,6 +833,7 @@ class ServantVoices:
             for line in voices['voiceLines']:
                 line['ascension'] = ascension
                 line['svtVoiceType'] = type
+                line['svt_name'] = self.name(ascension)
                 if 'name' not in line:
                     continue
                 name = line['overwriteName'] if line['overwriteName'] else line['name']
@@ -827,7 +856,7 @@ class ServantVoices:
                 self.amount += 1
 
         if fill_all_ascensions:
-            ascensionAdd = data['ascensionAdd']['voicePrefix']
+            ascensionAdd = self.dictionary['ascensionAdd']['voicePrefix']
             for ascension_str, target_ascension in ascensionAdd['ascension'].items():
                 ascension_str: Ascension = list(Ascension)[int(ascension_str)]
                 target_ascension: Ascension = list(Ascension)[target_ascension]
