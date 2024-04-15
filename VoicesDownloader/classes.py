@@ -1,6 +1,4 @@
-from io import StringIO
-from typing import Any, Generator, Optional
-import re
+from typing import Any, Callable, Generator
 import asyncio
 import threading
 import atexit
@@ -35,13 +33,21 @@ logger = getLogger('AA_voices_downloader')
 
 
 async def update_modified_date(path: Path):
+    """ Set's path modify time to now
+    :param path: Target path
+    """
     assert path.exists()
     os.utime(path, (path.lstat().st_birthtime, time()))
 
 
-class NoVoiceLines(Exception): pass
-class FFMPEGException(Exception): pass
-class DownloadException(Exception): pass
+class NoVoiceLines(Exception):
+    """Raised when ServantVoices used without initiating via buildVoiceLinesDict()"""
+class NoSuchCategory(Exception):
+    """Raised when ServantVoices used without initiating via buildVoiceLinesDict()"""
+class FFMPEGException(Exception):
+    """Raised when FFMpeg launch returns non-zero code (when some fault occurred)"""
+class DownloadException(Exception):
+    """Raised when downloading file impossible or error occurred during download"""
 
 """
 Analog to code below:
@@ -69,6 +75,7 @@ Ascension = IntEnum('Ascension', dict(
 
 
 class VoiceLineCategory(IntEnum):
+    """Used to replace category's with numbers"""
     Home = 0
     Growth = 1
     FirstGet = 2
@@ -82,9 +89,15 @@ class VoiceLineCategory(IntEnum):
     Guide = 10
     EventTowerReward = 11
     EventDailyPoint = 12
+    TreasureBox = 13
 
     @classmethod
     def fromString(cls, value: str) -> 'VoiceLineCategory':
+        """ Converts string to VoiceLineCategory
+        :param value: String containing name of category
+        :raises NoSuchCategory: Raised when no such category existing
+        :return: Category as class instance
+        """
         match value:
             case 'home':
                 return cls.Home
@@ -112,6 +125,8 @@ class VoiceLineCategory(IntEnum):
                 return cls.EventTowerReward
             case 'eventDailyPoint':
                 return cls.EventDailyPoint
+            case 'treasureBox':
+                return cls.TreasureBox
             case _:
                 raise Exception(f"There's no such category: \"{value}\"")
 
@@ -186,13 +201,12 @@ SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
 }
 
 class Downloader:
+    """ Class for downloading data from atlas academy """
     __slots__ = (
         'delay', 'maximum_retries', 'timestamps', 'last_request',
         'session', 'basic_servant', 'animation_bool', 'animation_speed'
     )
-    timestamps: dict[str, float] | None
-    basic_servant: 'BasicServant | None'
-    _instance: Optional['Downloader'] = None
+    _instance: 'Downloader | None' = None
     API_SERVER: str = r'https://api.atlasacademy.io'
     SERVANTS_FOLDER = MAINDIR / 'Servants'
     VOICES_FOLDER_NAME = 'voices'
@@ -200,7 +214,7 @@ class Downloader:
 
     def __new__(cls, *args, **kwargs):
         if not isinstance(cls._instance, cls):
-            cls._instance = super().__new__(cls)
+            cls._instance: Downloader | None = super().__new__(cls)
         return cls._instance
 
     def __init__(self, delay: float = 1, maximum_retries: int = 3) -> None:
@@ -208,17 +222,23 @@ class Downloader:
         assert isinstance(maximum_retries, int)
         if hasattr(self, 'delay'): return
         logger.info(f"Initialized Downloader with params {delay=}, {maximum_retries=}")
-        self.delay = delay
-        self.maximum_retries = maximum_retries
-        self.last_request = time()
-        self.session = ClientSession()
-        self.animation_bool = False
-        self.animation_speed = 0.5
-        self.timestamps = None
-        self.basic_servant = None
+        self.delay: float | int = delay
+        self.maximum_retries: int = maximum_retries
+        self.last_request: float = time()
+        self.session: ClientSession | None = ClientSession()
+        self.animation_bool: bool = False
+        self.animation_speed: float | int = 0.5
+        self.timestamps: dict[str, float] | None = None
+        self.basic_servant: BasicServant | None = None
         atexit.register(self.destroy)
 
     def _spinner_thread(self, spinner: Spinner):
+        """ Function for updating spinner in other thread
+        Sets self.animation_bool to True automatically
+        Relies on self.animation_speed
+        :param spinner: Target spinner
+        """
+        assert self.session is not None, "Instance destroyed"
         logger.debug("Spinner thread started")
         self.animation_bool = True
         while self.animation_bool:
@@ -227,6 +247,8 @@ class Downloader:
         logger.debug("Spinner thread ended")
 
     async def _print_all_conflicts(self) -> None:
+        """ Prints in stdin all path conflicts for all servants """
+        assert self.session is not None, "Instance destroyed"
         await self.updateBasicServant()
         assert isinstance(self.basic_servant, BasicServant)
         for i in range(1, self.basic_servant.collectionNoMax+1):
@@ -235,6 +257,11 @@ class Downloader:
             voices._print_conflicts()
 
     async def updateInfo(self) -> None:
+        """
+        Sets self.timestamps.
+        Can be called only once (further calls makes no effect)
+        """
+        assert self.session is not None, "Instance destroyed"
         if self.timestamps is not None:
             return
         info = await self.request_json('/info')
@@ -243,6 +270,11 @@ class Downloader:
         assert len(self.timestamps) > 0
 
     async def updateBasicServant(self) -> None:
+        """
+        Sets self.basic_servant
+        Can be called only once (further calls makes no effect)
+        """
+        assert self.session is not None, "Instance destroyed"
         if self.basic_servant is not None:
             return
         json = await self.request_json('/export/NA/basic_servant.json')
@@ -250,6 +282,15 @@ class Downloader:
         self.basic_servant = BasicServant(json)
 
     async def request(self, address: str, params: dict | None = dict()) -> bytes:
+        """ Requests data from atlas academy API
+        :param address: Address without domain name like in rapidoc documentation
+            example: "/basic/{region}/servant/{servant_id}"
+        :param params: parameters passed to request.
+            Always "lore=True" for servant json requests.
+            Defaults to dict()
+        :return: bytes received from API. No validation made
+        """
+        assert self.session is not None, "Instance destroyed"
         assert isinstance(self.session, ClientSession)
         assert isinstance(address, str)
         if params is not None:
@@ -295,14 +336,24 @@ class Downloader:
             calls_amount += 1
 
     async def request_json(self, address: str, params: dict = dict()) -> dict | list:
+        """ Usual request(), but this returns json instead of bytes """
+        assert self.session is not None, "Instance destroyed"
         return json.loads(await self.request(
             address=address,
             params=params
         ))
 
     async def download(self, address: str, save_path: Path, params: dict | None = None) -> None:
+        """ Downloads any file from atlas academy api (site check included)
+        :param address: Address passed to request()
+        :param save_path: Target path where write bytes
+        :param params: Parameters passed to request()
+        """
+        assert self.session is not None, "Instance destroyed"
         assert isinstance(self.session, ClientSession)
         assert isinstance(address, str)
+        assert address.startswith('/') or address.startswith('https://static.atlasacademy.io'),\
+            f"Address {address} request data from unknown site"
         assert isinstance(save_path, Path)
         assert isinstance(params, dict) or params is None
 
@@ -317,33 +368,42 @@ class Downloader:
             self,
             bar: type[Bar] | None = None,
             bar_arguments: dict | None = None,
-            _spinner: type[Spinner] | None= None
+            spinner: type[Spinner] | None= None
         ) -> None:
+        """ Starts job to check all missing voice lines and their download
+        :param bar: Bar class to track current progress.
+            If None progress won't be printed
+        :param bar_arguments: Arguments to pass to Bar instance
+        :param _spinner: _description_, defaults to None
+        :raises DownloadException: _description_
+        :raises FFMPEGException: _description_
+        """
+        assert self.session is not None, "Instance destroyed"
         assert bar is None or issubclass(bar, Bar)
         assert bar_arguments is None or isinstance(bar, dict)
         logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         if bar_arguments is None: bar_arguments = dict()
 
-        if _spinner is not None:
-            spinner = _spinner(message='Updating info ')
+        if spinner is not None:
+            spin = spinner(message='Updating info ')
             thread = threading.Thread(
                 name='Spinner',
                 daemon=True,
                 target=self._spinner_thread,
-                args=(spinner,)
+                args=(spin,)
             )
             thread.start()
 
         await self.updateInfo()
         assert isinstance(self.timestamps, dict)
-        if _spinner is not None: spinner.message = 'Updating Basic Servant '
+        if spinner is not None: spin.message = 'Updating Basic Servant '
         await self.updateBasicServant()
         assert isinstance(self.basic_servant, BasicServant)
-        if _spinner is not None:
-            spinner.message = 'Finished '
+        if spinner is not None:
+            spin.message = 'Finished '
             self.animation_bool = False
             thread.join()
-            spinner.finish()
+            spin.finish()
         try:
             for i in range(1, self.basic_servant.collectionNoMax+1):
                 voices = await ServantVoices.load(i)
@@ -357,18 +417,27 @@ class Downloader:
             raise
 
     def destroy(self) -> None:
+        """ Deletes current instance """
         assert isinstance(self.session, ClientSession)
         asyncio.run(self.session.close())
         self.session = None
+        type(self)._instance = None
 
 
 class VoiceLine:
+    """
+    Container class to hold information about voice line.
+    On initializing edits some voice_line parameters.
+    Dictionary values can be changed to alter voice_line properties returns.
+        Example: change VoiceLine.dictionary['ascension'] to change ascension of voice line
+    All properties lazy and cached to ensure non-repeating context
+    """
     __slots__ = (
         '__dict__', 'dictionary'
     )
-    dictionary: dict[str, Any]
 
     def __init__(self, values: dict[str, Any]) -> None:
+        """ Class for containing dictionary about voice line """
         assert isinstance(values, dict)
         assert 'svt_id' in values, \
             "Servant id (svt_id) should be added in dictionary passed to VoiceLine"
@@ -379,7 +448,7 @@ class VoiceLine:
         assert isinstance(values['overwriteName'], str)
         assert isinstance(values['svtVoiceType'], VoiceLineCategory)
 
-        self.dictionary = values
+        self.dictionary: dict[str, Any] = values
         for i in ('name', 'overwriteName'):
             self.dictionary[i] = self.dictionary[i]\
                 .replace(' \r\n- ', ' - ')\
@@ -441,10 +510,12 @@ class VoiceLine:
 
     @PropertyOneCall
     def anyName(self) -> str:
+        """ Guarantee to return any name string """
         return self.overwriteName if self.overwriteName else self.name
 
     @PropertyOneCall
     def path_folder(self) -> Path:
+        """ Path to folder containing voice line """
         return Downloader.SERVANTS_FOLDER / str(self.servant_id) / Downloader.VOICES_FOLDER_NAME / \
             self.ascension.name / self.type.name / self.dictionary['path_add']
 
@@ -455,23 +526,28 @@ class VoiceLine:
 
     @PropertyOneCall
     def path(self) -> Path:
+        """ Full path to voice line"""
         return self.path_folder / self.filename
 
     @PropertyOneCall
     def index(self) -> int:
+        """ Index of the voice line. index != -1 only if "{0}" in overwriteName """
         assert isinstance(self.dictionary['_index'], int)
         return self.dictionary['_index']
 
     @property
     def loaded(self) -> bool:
+        """ Returns True if voice line downloaded """
         return self.path.exists()
 
     @PropertyOneCall
     def subtitle(self) -> str:
+        """ Text of the voice line [ENG]"""
         assert 'subtitle' in self.dictionary
         return self.dictionary['subtitle']
 
     def _voiceLinesURL(self) -> Generator[str, None, None]:
+        """ Iterator over URLs to voice line parts"""
         assert 'audioAssets' in self.dictionary
         yield from self.dictionary['audioAssets']
 
@@ -479,6 +555,13 @@ class VoiceLine:
         self,
         source_paths: list[Path]
     ) -> None:
+        """ Generates current voice_line from sources
+        When FFMpeg fails, method checks source files for JSON readability.
+        If method succeeds in reading, DownloadException raised
+        :param source_paths: List of paths to concat. MUST be in the same folder
+        :raises DownloadException: At least one of the sources failed to download
+        :raises FFMPEGException: Raised when all files OK but FFMpeg failed
+        """
         assert len({str(i.parent) for i in source_paths}) == 1  # Same parent folder
         assert not self.loaded
         assert source_paths
@@ -533,6 +616,9 @@ class VoiceLine:
 
     @staticmethod
     def _leftovers_delete(paths: list[Path]) -> None:
+        """ Removes any leftovers. First of all, all paths unlinked.
+        Then, if parent folder empty, unlink it as well
+        """
         logger.warning('Exception during VoiceLine file download')
         if len(paths) == 0:
             return
@@ -549,6 +635,9 @@ class VoiceLine:
         logger.info('Unlinked temporary files successfully')
 
     async def download(self) -> None:
+        """ Downloads current voice line.
+            Uses Downloader, self.path/_leftovers_delete/_voiceLinesURL/concat_mp3
+        """
         assert not self.path.exists()
         downloader = Downloader()
         paths: list[Path] = []
@@ -574,10 +663,17 @@ class VoiceLine:
 
 
 class BasicServant:
+    """ Contains basic information about all servants """
     __slots__ = ('__dict__', 'values')
 
     def __init__(self, values: list) -> None:
+        """
+        :param values: Parsed JSON from data
+        """
         self.values: dict[int, dict] = {i['collectionNo']: i for i in values}
+
+    def __len__(self) -> int:
+        return len(self.values)
 
     def __getitem__(self, item: int) -> dict:
         assert isinstance(item, int)
@@ -585,72 +681,92 @@ class BasicServant:
 
     @cached_property
     def collectionNoMax(self) -> int:
+        """ Latest servant index of all servants amount """
         return max(self.values.keys())
+
 
 ANNOTATION_VOICE_CATEGORY = dict[VoiceLineCategory, dict[str, list[VoiceLine]]]
 ANNOTATION_VOICES = dict[Ascension, ANNOTATION_VOICE_CATEGORY] | None
 class ServantVoices:
-    __slots__ = (
-        'id', 'voice_lines', 'amount', 'skipped_amount'
-    )
+    """ Container of VoiceLine-s"""
+    __slots__ = ('collectionNo', 'voice_lines', 'amount', 'skipped_amount')
 
-    def __init__(self, id: int):
-        self.id: int = id
+    def __init__(self, collectionNo: int):
+        self.collectionNo: int = collectionNo
         self.voice_lines: ANNOTATION_VOICES = None
 
     def __repr__(self) -> str:
-        return f"<Svt {self.id}" + (' with voice lines' if self.voice_lines else '') + '>'
+        return f"<Svt {self.collectionNo}" + (' with voice lines' if self.voice_lines else '') + '>'
 
     @property
     def path(self) -> Path:
-        return Downloader.SERVANTS_FOLDER / str(self.id)
+        """ Path to servant folder, containing JSON and voices folder"""
+        return Downloader.SERVANTS_FOLDER / str(self.collectionNo)
 
     @property
     def path_json(self) -> Path:
+        """ Path to servant JSON """
         return self.path / 'info.json'
 
     @property
     def path_voices(self) -> Path:
+        """ Path to servant voices folder (contains voice lines)"""
         return self.path / 'voices'
 
     @classmethod
-    async def _get_json(cls, id: int) -> dict:
+    async def _get_json(cls, collectionNo: int) -> dict:
+        """ Download and parse current servant JSON info
+        :param id: collectionNo of servant
+        :type id: int
+        :return: parsed JSON
+        :rtype: dict
+        """
         json = await Downloader().request_json(
-            address=f'/nice/NA/servant/{id}',
+            address=f'/nice/NA/servant/{collectionNo}',
             params={'lore': 'true'}
         )
         assert isinstance(json, dict)
         return json
 
-
     @classmethod
-    async def _updateJSON(cls, id: int) -> None:
-        servant_folder = Downloader.SERVANTS_FOLDER / f"{id}"
+    async def _updateJSON(cls, collectionNo: int) -> None:
+        """ Updates (replaces) current servant JSON """
+        servant_folder = Downloader.SERVANTS_FOLDER / f"{collectionNo}"
         servant_json_path = servant_folder / 'info.json'
         servant_json_path.parent.mkdir(parents=True, exist_ok=True)
 
         await Downloader().download(
-            address=f'/nice/NA/servant/{id}',
+            address=f'/nice/NA/servant/{collectionNo}',
             save_path=servant_json_path,
             params={'lore': 'true'}
         )
 
     @classmethod
-    async def load(cls, id: int) -> 'ServantVoices':
-        servant_folder = Downloader.SERVANTS_FOLDER / f"{id}"
+    async def load(cls, collectionNo: int) -> 'ServantVoices':
+        """ Loads servant with specific collectionNo
+        :param id: _description_
+        :type id: int
+        :return: _description_
+        :rtype: ServantVoices
+        """
+        servant_folder = Downloader.SERVANTS_FOLDER / f"{collectionNo}"
         servant_json_path = servant_folder / 'info.json'
 
         while True:
             # JSON doesn't exist
             if not servant_json_path.exists():
-                await cls._updateJSON(id=id)
+                await cls._updateJSON(collectionNo=collectionNo)
             break
 
-        sv = ServantVoices(id=id)
+        sv = ServantVoices(collectionNo=collectionNo)
         asyncio.create_task(update_modified_date(sv.path_json))
         return sv
 
     def buildVoiceLinesDict(self, fill_all_ascensions: bool = False) -> None:
+        """ This method sole target: make self.voice_lines. But it's a complex task
+        :param fill_all_ascensions: If True, all self.voice_lines will be filled with ascensions 0-4
+        :raises RuntimeError: When .buildVoiceLinesDict() used without loading Servant via .load()
+        """
         if not self.path_json.exists():
             raise RuntimeError("Load servants via ServantVoices.load() classmethod")
         data: dict = json.loads(self.path_json.read_text(encoding='utf-8'))
@@ -685,7 +801,7 @@ class ServantVoices:
                     output[ascension][type][name][-1]\
                         .dictionary['_index'] = len(output[ascension][type][name])-1
                     line['_index'] = len(output[ascension][type][name])
-                line['svt_id'] = self.id
+                line['svt_id'] = self.collectionNo
                 output[ascension][type][name].append(VoiceLine(line))
                 self.amount += 1
 
@@ -699,7 +815,7 @@ class ServantVoices:
 
         self.voice_lines = output
 
-        exceptions = SERVANT_EXCEPTIONS.get(self.id, set())
+        exceptions = SERVANT_EXCEPTIONS.get(self.collectionNo, set())
         if exceptions:
             if ExceptionType.NP_IN_BATTLE_SECTION in exceptions:
                 for ascension_values in self.voice_lines.values():
@@ -714,11 +830,12 @@ class ServantVoices:
                             self.amount -= 1
                             self.skipped_amount += 1
                             logger.warning(
-                                f"S{self.id}: Skipped {self.path} because NP card broken"
+                                f"S{self.collectionNo}: Skipped {self.path} because NP card broken"
                             )
                     for name in to_pop: category.pop(name)
 
     def allVoices(self) -> Generator[VoiceLine, None, None]:
+        """ Iterates over all possible, correct voice lines """
         assert isinstance(self.voice_lines, dict)
         for ascension_values in self.voice_lines.values():
             for category_values in ascension_values.values():
@@ -727,11 +844,13 @@ class ServantVoices:
                         yield voice_line
 
     def loadedVoices(self) -> Generator[VoiceLine, None, None]:
+        """ Iterates over all possible, correct and downloaded voice lines"""
         for voice_line in self.allVoices():
             if voice_line.loaded:
                 yield voice_line
 
     def _iterate_over_conflicts(self) -> Generator[list[VoiceLine], None, None]:
+        """ Yields list of voice lines that points to the same path """
         if self.voice_lines is None:
             raise NoVoiceLines("Trying to updateVoices before buildVoiceLinesDict() called")
         paths: dict[str, list[VoiceLine]] = dict()
@@ -748,15 +867,21 @@ class ServantVoices:
 
 
     def _print_conflicts(self) -> None:
+        """ Using _iterate_over_conflicts() to print conflicts """
         for duplicates in self._iterate_over_conflicts():
             print(
-                f"{self.id: >3}: "
+                f"{self.collectionNo: >3}: "
                 f"{', '.join((f"{i.name} ({i.type})".ljust(50) for i in duplicates))}"
                 f" points to one path {duplicates[0].path}"
             )
 
-
     async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
+        """ Main possible function for VoiceLine. Downloading current voice line
+            with tracking progress with created Bar.
+        :param bar: Created bar to track progress. None, if no progress track needed
+        :param message_size: Bar.message size. No effect if bar=None
+        :raises NoVoiceLines: When buildVoiceLinesDict() did not call before updateVoices()
+        """
         downloader = Downloader()
         if self.voice_lines is None:
             raise NoVoiceLines("Trying to updateVoices before buildVoiceLinesDict() called")
@@ -764,17 +889,17 @@ class ServantVoices:
             await downloader.updateInfo()
         assert isinstance(downloader.timestamps, dict)
         if not self.path_json.exists():
-            logger.exception(f"S{self.id}: JSON doesn't exist, but must exist")
+            logger.exception(f"S{self.collectionNo}: JSON doesn't exist, but must exist")
         elif downloader.timestamps['NA'] > self.path.lstat().st_mtime:
-            logger.info(f'S{self.id}: folder modified before NA patch')
+            logger.info(f'S{self.collectionNo}: folder modified before NA patch')
             current_json = json.loads(self.path_json.read_text(encoding='utf-8'))
-            new_json = await self._get_json(self.id)
+            new_json = await self._get_json(self.collectionNo)
             if current_json != new_json:
-                logger.info(f'S{self.id}: New JSON different from old')
+                logger.info(f'S{self.collectionNo}: New JSON different from old')
                 shutil.rmtree(self.path_voices)
             else:
                 asyncio.create_task(update_modified_date(self.path))
-        logger.debug(f'Started updating {self.id} voices')
+        logger.debug(f'Started updating {self.collectionNo} voices')
         self.path_voices.mkdir(parents=False, exist_ok=True)
         if bar is not None:
             voice_lines_amount = self.amount
@@ -804,12 +929,12 @@ class ServantVoices:
                         except DownloadException:
                             if ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION\
                                 not in\
-                                SERVANT_EXCEPTIONS.get(self.id, set()):
+                                SERVANT_EXCEPTIONS.get(self.collectionNo, set()):
                                 raise
                             self.skipped_amount += 1
                             downloaded_counter  -= 1
                             logger.warning(
-                                f"S{self.id}: Skipping VoiceLine {voice_line.path} due to"
+                                f"S{self.collectionNo}: Skipping VoiceLine {voice_line.path} due to"
                                 f" {ExceptionType.__name__}."
                                 f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
                                 " == true"
@@ -819,7 +944,7 @@ class ServantVoices:
 
                         asyncio.create_task(update_modified_date(self.path))
         if bar is not None:
-            bar.message = f'Servant {self.id: >3} up-to-date'
+            bar.message = f'Servant {self.collectionNo: >3} up-to-date'
             bar.suffix = '%(index)d/%(max)d'
             downloaded = f' (downloaded: {downloaded_counter})' if downloaded_counter else ''
             skipped = f' (skipped: {self.skipped_amount})' if self.skipped_amount else ''
@@ -828,7 +953,7 @@ class ServantVoices:
             bar.finish()
         if downloaded_counter:
             logger.info(f"Downloaded {downloaded_counter}/{voice_lines_amount} "
-                f"for servant {self.id} (skipped {self.skipped_amount})"
+                f"for servant {self.collectionNo} (skipped {self.skipped_amount})"
             )
         asyncio.create_task(update_modified_date(self.path_voices))
-        logger.debug(f'Finished updating {self.id} voices')
+        logger.debug(f'Finished updating {self.collectionNo} voices')

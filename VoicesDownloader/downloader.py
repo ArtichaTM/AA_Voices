@@ -27,7 +27,7 @@ async def amain():
     downloader =  Downloader(delay=1, maximum_retries=7)
     logger.info('Downloader initialized')
 
-    await downloader.recheckAllVoices(bar=Bar, _spinner=Spinner)
+    await downloader.recheckAllVoices(bar=Bar, spinner=Spinner)
     # await downloader.recheckAllVoices()
     # await downloader._print_all_conflicts()
 
