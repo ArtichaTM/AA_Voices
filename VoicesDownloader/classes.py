@@ -1,4 +1,4 @@
-from typing import Any, Callable, Generator
+from typing import Any, AsyncGenerator, Callable, Generator
 import asyncio
 import threading
 import atexit
@@ -245,15 +245,27 @@ class Downloader:
             sleep(self.animation_speed)
         logger.debug("Spinner thread ended")
 
-    async def _print_all_conflicts(self) -> None:
+    async def servants(
+            self,
+            buildVoiceLines: bool = True,
+            updateVoices: bool = False
+        ) -> AsyncGenerator['ServantVoices', None]:
         """ Prints in stdin all path conflicts for all servants """
         assert self.session is not None, "Instance destroyed"
         await self.updateBasicServant()
         assert isinstance(self.basic_servant, BasicServant)
         for i in range(1, self.basic_servant.collectionNoMax+1):
             voices = await ServantVoices.load(i)
-            voices.buildVoiceLinesDict(fill_all_ascensions=False)
-            voices._print_conflicts()
+            if buildVoiceLines:
+                voices.buildVoiceLinesDict(fill_all_ascensions=False)
+            if updateVoices:
+                await voices.updateVoices()
+            yield voices
+
+    async def _print_all_conflicts(self) -> None:
+        """ Prints in stdin all path conflicts for all servants """
+        async for servant in self.servants():
+            servant._print_conflicts()
 
     async def updateInfo(self) -> None:
         """
@@ -404,14 +416,12 @@ class Downloader:
             thread.join()
             spin.finish()
         try:
-            for i in range(1, self.basic_servant.collectionNoMax+1):
-                voices = await ServantVoices.load(i)
-                voices.buildVoiceLinesDict(fill_all_ascensions=False)
-                await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)
+            async for servant in self.servants():
+                await servant.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)
         except:
             logger.warning(
                 "Exception during Downloader.recheckAllVoices(). "
-                f"Updated {i}/{self.basic_servant.collectionNoMax} servants"
+                f"Updated {servant.collectionNo}/{self.basic_servant.collectionNoMax} servants"
             )
             raise
 
@@ -526,6 +536,7 @@ class VoiceLine:
 
     @PropertyOneCall
     def filename(self) -> str:
+        """ Full file name in the destination folder. Example: "Skill 1.mp4" """
         index = '' if self.index == -1 else f" {self.index+1}"
         return f"{self.anyName}{index}.mp3"
 
