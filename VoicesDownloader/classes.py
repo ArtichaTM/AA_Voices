@@ -11,7 +11,6 @@ from time import time
 from time import sleep
 from pathlib import Path
 import shutil
-from functools import cached_property
 
 import aiohttp
 from aiohttp import ClientSession
@@ -679,7 +678,7 @@ class BasicServant:
         assert isinstance(item, int)
         return self.values.__getitem__(item)
 
-    @cached_property
+    @property
     def collectionNoMax(self) -> int:
         """ Latest servant index of all servants amount """
         return max(self.values.keys())
