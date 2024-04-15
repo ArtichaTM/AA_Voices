@@ -229,7 +229,7 @@ class Downloader:
     async def _print_all_conflicts(self) -> None:
         await self.updateBasicServant()
         assert isinstance(self.basic_servant, BasicServant)
-        for i in range(1, self.basic_servant.collectionNoMax):
+        for i in range(1, self.basic_servant.collectionNoMax+1):
             voices = await ServantVoices.load(i)
             voices.buildVoiceLinesDict(fill_all_ascensions=False)
             voices._print_conflicts()
@@ -345,7 +345,7 @@ class Downloader:
             thread.join()
             spinner.finish()
         try:
-            for i in range(1, self.basic_servant.collectionNoMax):
+            for i in range(1, self.basic_servant.collectionNoMax+1):
                 voices = await ServantVoices.load(i)
                 voices.buildVoiceLinesDict(fill_all_ascensions=False)
                 await voices.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)
