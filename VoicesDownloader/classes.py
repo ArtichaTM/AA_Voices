@@ -121,6 +121,56 @@ class ExceptionType(IntEnum):
     SKIP_ON_DOWNLOAD_EXCEPTION = 1
 
 
+class PropertyOneCall[T]:
+    def __init__(self, fget: Callable[[Any], T] | None =None, fset=None, fdel=None, doc=None):
+        self.fget = fget
+        self.fset = fset
+        self.fdel = fdel
+        if doc is None and fget is not None:
+            doc = fget.__doc__
+        self.__doc__ = doc
+        self._name = ''
+
+    def __set_name__(self, owner, name):
+        self._name = name
+
+    def __get__(self, obj, objtype=None) -> T:
+        if self.fget is None:
+            raise AttributeError(
+                f'property {self._name!r} of {type(obj).__name__!r} object has no getter'
+             )
+        return self.fget(obj)
+
+    def __set__(self, obj, value):
+        if self.fset is None:
+            raise AttributeError(
+                f'property {self._name!r} of {type(obj).__name__!r} object has no setter'
+             )
+        self.fset(obj, value)
+
+    def __delete__(self, obj):
+        if self.fdel is None:
+            raise AttributeError(
+                f'property {self._name!r} of {type(obj).__name__!r} object has no deleter'
+             )
+        self.fdel(obj)
+
+    def getter(self, fget):
+        prop = type(self)(fget, self.fset, self.fdel, self.__doc__)
+        prop._name = self._name
+        return prop
+
+    def setter(self, fset):
+        prop = type(self)(self.fget, fset, self.fdel, self.__doc__)
+        prop._name = self._name
+        return prop
+
+    def deleter(self, fdel):
+        prop = type(self)(self.fget, self.fset, fdel, self.__doc__)
+        prop._name = self._name
+        return prop
+
+
 MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
 SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
     66: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
@@ -363,51 +413,51 @@ class VoiceLine:
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
 
-    @property
+    @PropertyOneCall
     def servant_id(self) -> int:
         assert 'svt_id' in self.dictionary
         return self.dictionary['svt_id']
 
-    @cached_property
+    @PropertyOneCall
     def ascension(self) -> Ascension:
         assert 'ascension' in self.dictionary
         return self.dictionary['ascension']
 
-    @cached_property
+    @PropertyOneCall
     def type(self) -> VoiceLineCategory:
         assert 'svtVoiceType' in self.dictionary
         assert isinstance(self.dictionary['svtVoiceType'], VoiceLineCategory)
         return self.dictionary['svtVoiceType']
 
-    @cached_property
+    @PropertyOneCall
     def name(self) -> str:
         assert 'name' in self.dictionary
         return self.dictionary['name']
 
-    @cached_property
+    @PropertyOneCall
     def overwriteName(self) -> str:
         assert 'overwriteName' in self.dictionary
         return self.dictionary['overwriteName']
 
-    @cached_property
+    @PropertyOneCall
     def anyName(self) -> str:
         return self.overwriteName if self.overwriteName else self.name
 
-    @cached_property
+    @PropertyOneCall
     def path_folder(self) -> Path:
         return Downloader.SERVANTS_FOLDER / str(self.servant_id) / Downloader.VOICES_FOLDER_NAME / \
             self.ascension.name / self.type.name / self.dictionary['path_add']
 
-    @cached_property
+    @PropertyOneCall
     def filename(self) -> str:
         index = '' if self.index == -1 else f" {self.index+1}"
         return f"{self.anyName}{index}.mp3"
 
-    @cached_property
+    @PropertyOneCall
     def path(self) -> Path:
         return self.path_folder / self.filename
 
-    @cached_property
+    @PropertyOneCall
     def index(self) -> int:
         assert isinstance(self.dictionary['_index'], int)
         return self.dictionary['_index']
@@ -416,14 +466,14 @@ class VoiceLine:
     def loaded(self) -> bool:
         return self.path.exists()
 
-    def _voiceLinesURL(self) -> Generator[str, None, None]:
-        assert 'audioAssets' in self.dictionary
-        yield from self.dictionary['audioAssets']
-
-    @property
+    @PropertyOneCall
     def subtitle(self) -> str:
         assert 'subtitle' in self.dictionary
         return self.dictionary['subtitle']
+
+    def _voiceLinesURL(self) -> Generator[str, None, None]:
+        assert 'audioAssets' in self.dictionary
+        yield from self.dictionary['audioAssets']
 
     def concat_mp3(
         self,
