@@ -1141,6 +1141,7 @@ class ServantVoices:
                                     f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
                                     " == true"
                                 )
+                                continue
                         if load_wav:
                             voice_line.convert_to_wav(unlink_source=not save_mp3)
                         # Not ok only when save    is requested, but no file existing
