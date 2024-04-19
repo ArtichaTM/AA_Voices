@@ -1155,7 +1155,7 @@ class ServantVoices:
             bar.message = f'Servant {self.collectionNo: >3} up-to-date'
             bar.suffix = '%(index)d/%(max)d'
             downloaded = f' (downloaded: {downloaded_counter})' if downloaded_counter else ''
-            downloaded = f' (converted: {converted_counter})' if converted_counter else ''
+            converted = f' (converted: {converted_counter})' if converted_counter else ''
             skipped = f' (skipped: {self.skipped_amount})' if self.skipped_amount else ''
             bar.suffix = bar.suffix.ljust(7) + downloaded + converted + skipped
             bar.update()
