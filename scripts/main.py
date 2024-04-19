@@ -32,7 +32,8 @@ async def amain():
     await downloader.recheckAllVoices(
         bar=Bar,
         spinner=Spinner,
-        convert_to_wav=False
+        save_wav=True,
+        save_mp3=True
     )
     # await downloader.recheckAllVoices()
     # await downloader._print_all_conflicts()

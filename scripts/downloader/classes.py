@@ -430,20 +430,28 @@ class Downloader:
             bar: type[Bar] | None = None,
             bar_arguments: dict | None = None,
             spinner: type[Spinner] | None= None,
-            convert_to_wav: bool = True
+            save_mp3: bool = False,
+            save_wav: bool = True
         ) -> None:
         """ Starts job to check all missing voice lines and their download
         :param bar: Bar class to track current progress.
             If None progress won't be printed
         :param bar_arguments: Arguments to pass to Bar instance
-        :param _spinner: _description_, defaults to None
-        :raises DownloadException: _description_
-        :raises FFMPEGException: _description_
+        :param spinner: Class of spinner to show non-bar status info
+        :param save_mp3: Store voice line in mp3
+            if False, save_wav should be True
+        :param save_wav: Store voice_line in wav (pcm_s16le)
+            if False, save_mp3 should be True
+        :raises DownloadException: Raised when during downloading one of voice lines or JSON
+            something went wrong. Usually when on AA voices lines bugged
+        :raises FFMPEGException: Raised when FFMpeg returned exception when shouldn't
         """
         assert self.session is not None, "Instance destroyed"
         assert bar is None or issubclass(bar, Bar)
         assert bar_arguments is None or isinstance(bar, dict)
-        assert isinstance(convert_to_wav, bool)
+        assert isinstance(save_mp3, bool)
+        assert isinstance(save_wav, bool)
+        assert save_mp3 or save_wav
         logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         if bar_arguments is None: bar_arguments = dict()
 
@@ -471,7 +479,8 @@ class Downloader:
             async for servant in self.servants():
                 await servant.updateVoices(
                     bar=bar(**bar_arguments) if bar is not None else None,
-                    convert_to_wav=convert_to_wav
+                    save_mp3=save_mp3,
+                    save_wav=save_wav
                 )
         except:
             logger.warning(
@@ -1051,12 +1060,17 @@ class ServantVoices:
             self,
             bar: Bar | None = None,
             message_size: int = 40,
-            convert_to_wav: bool = True
+            save_mp3: bool = True,
+            save_wav: bool = True
         ) -> None:
         """ Main possible function for VoiceLine. Downloading current voice line
             with tracking progress with created Bar.
         :param bar: Created bar to track progress. None, if no progress track needed
         :param message_size: Bar.message size. No effect if bar=None
+        :param save_mp3: Store voice line in mp3
+            if False, save_wav should be True
+        :param save_wav: Store voice_line in wav (pcm_s16le)
+            if False, save_mp3 should be True
         :raises NoVoiceLines: When buildVoiceLinesDict() did not call before updateVoices()
         """
         downloader = Downloader()
@@ -1103,7 +1117,7 @@ class ServantVoices:
                             )[:message_size]
                             bar.index += 1
                         if voice_line.loaded:
-                            if convert_to_wav and not voice_line.loaded_wav:
+                            if save_wav and not voice_line.loaded_wav:
                                 voice_line.convert_to_wav(unlink_source=True)
                                 assert not voice_line.loaded_mp3
                                 assert     voice_line.loaded_wav
@@ -1124,14 +1138,10 @@ class ServantVoices:
                                 f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
                                 " == true"
                             )
-                        if convert_to_wav:
-                            voice_line.convert_to_wav(unlink_source=True)
-                            assert not voice_line.loaded_mp3
-                            assert     voice_line.loaded_wav
-                        else:
-                            assert     voice_line.loaded_mp3
-                            assert not voice_line.loaded_wav
-
+                        if save_wav:
+                            voice_line.convert_to_wav(unlink_source=not save_mp3)
+                        assert save_mp3 and voice_line.loaded_mp3
+                        assert save_wav and voice_line.loaded_wav
                         if bar is not None:
                             bar.update()
 
