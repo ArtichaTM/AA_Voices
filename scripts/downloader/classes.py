@@ -685,7 +685,7 @@ class VoiceLine:
         :raises FFMPEGException: Raised when all files OK but FFMpeg failed
         """
         assert len({str(i.parent) for i in source_paths}) == 1  # Same parent folder
-        assert not self.loaded
+        assert not self.loaded_mp3
         assert source_paths
 
         filenames = [i.name for i in source_paths]
@@ -743,7 +743,7 @@ class VoiceLine:
 
         command = (
             f'{FFMPEG_PATH} -i "{self.filename}" '
-            "-f pcm_s16le -acodec pcm_s16le -ar 22050 "
+            "-f s16le -acodec pcm_s16le -ar 22050 "
             f'"{self.filename_wav}"'
         )
         p = subprocess.Popen(
@@ -1103,45 +1103,50 @@ class ServantVoices:
             bar.message = 'Loading Servant info'
             bar.update()
         downloaded_counter = 0
+        converted_counter = 0
         for ascension_values in self.voice_lines.values():
             for category_values in ascension_values.values():
                 for type_values in category_values.values():
                     for voice_line in type_values:
+                        load_mp3 = save_mp3 and not voice_line.loaded_mp3
+                        load_wav = save_wav and not voice_line.loaded_wav
+                        if bar is not None:
+                            bar.index += 1
+                        if not load_mp3 and not load_wav:
+                            continue
                         if bar is not None:
                             bar.suffix = '%(index)d/%(max)d'
                             downloaded = f' (downloaded: {downloaded_counter})' if downloaded_counter else ''
+                            converted = f' (converted: {converted_counter})' if converted_counter else ''
                             skipped = f' (skipped: {self.skipped_amount})' if self.skipped_amount else ''
-                            bar.suffix = bar.suffix.ljust(7) + downloaded + skipped
+                            bar.suffix = bar.suffix.ljust(7) + downloaded + converted + skipped
                             bar.message = (f"{voice_line.ascension.name}: " +
                                 voice_line.name.__format__(f" <{message_size-11}")
                             )[:message_size]
-                            bar.index += 1
-                        if voice_line.loaded:
-                            if save_wav and not voice_line.loaded_wav:
-                                voice_line.convert_to_wav(unlink_source=True)
-                                assert not voice_line.loaded_mp3
-                                assert     voice_line.loaded_wav
-                            continue
-                        downloaded_counter += 1
-                        try:
-                            await voice_line.download()
-                        except DownloadException:
-                            if ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION\
-                                not in\
-                                SERVANT_EXCEPTIONS.get(self.collectionNo, set()):
-                                raise
-                            self.skipped_amount += 1
-                            downloaded_counter  -= 1
-                            logger.warning(
-                                f"S{self.collectionNo}: Skipping VoiceLine {voice_line.path} due to"
-                                f" {ExceptionType.__name__}."
-                                f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
-                                " == true"
-                            )
-                        if save_wav:
+                            bar.update()
+                        if not voice_line.loaded_mp3:
+                            downloaded_counter += 1
+                            try:
+                                await voice_line.download()
+                            except DownloadException:
+                                if ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION\
+                                    not in\
+                                    SERVANT_EXCEPTIONS.get(self.collectionNo, set()):
+                                    raise
+                                self.skipped_amount += 1
+                                downloaded_counter  -= 1
+                                logger.warning(
+                                    f"S{self.collectionNo}: Skipping VoiceLine {voice_line.path} due to"
+                                    f" {ExceptionType.__name__}."
+                                    f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
+                                    " == true"
+                                )
+                        if load_wav:
                             voice_line.convert_to_wav(unlink_source=not save_mp3)
-                        assert save_mp3 and voice_line.loaded_mp3
-                        assert save_wav and voice_line.loaded_wav
+                        # Not ok only when save    is requested, but no file existing
+                        assert not save_mp3 or voice_line.loaded_mp3
+                        # Not ok only when convert is requested, but no file existing
+                        assert not save_wav or voice_line.loaded_wav
                         if bar is not None:
                             bar.update()
 
@@ -1150,13 +1155,16 @@ class ServantVoices:
             bar.message = f'Servant {self.collectionNo: >3} up-to-date'
             bar.suffix = '%(index)d/%(max)d'
             downloaded = f' (downloaded: {downloaded_counter})' if downloaded_counter else ''
+            downloaded = f' (converted: {converted_counter})' if converted_counter else ''
             skipped = f' (skipped: {self.skipped_amount})' if self.skipped_amount else ''
-            bar.suffix = bar.suffix.ljust(7) + downloaded + skipped
+            bar.suffix = bar.suffix.ljust(7) + downloaded + converted + skipped
             bar.update()
             bar.finish()
-        if downloaded_counter:
+        if downloaded_counter or converted_counter:
             logger.info(f"Downloaded {downloaded_counter}/{voice_lines_amount} "
-                f"for servant {self.collectionNo} (skipped {self.skipped_amount})"
+                f"for servant {self.collectionNo} "
+                f"(skipped {self.skipped_amount}) "
+                f"(converted {converted_counter})"
             )
         asyncio.create_task(update_modified_date(self.path_voices))
         logger.debug(f'Finished updating {self.collectionNo} voices')
