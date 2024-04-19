@@ -479,7 +479,8 @@ class Downloader:
             self,
             bar: type[Bar] | None = None,
             bar_arguments: dict | None = None,
-            spinner: type[Spinner] | None= None
+            spinner: type[Spinner] | None= None,
+            convert_to_wav: bool = True
         ) -> None:
         """ Starts job to check all missing voice lines and their download
         :param bar: Bar class to track current progress.
@@ -492,6 +493,7 @@ class Downloader:
         assert self.session is not None, "Instance destroyed"
         assert bar is None or issubclass(bar, Bar)
         assert bar_arguments is None or isinstance(bar, dict)
+        assert isinstance(convert_to_wav, bool)
         logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         if bar_arguments is None: bar_arguments = dict()
 
@@ -517,7 +519,10 @@ class Downloader:
             spin.finish()
         try:
             async for servant in self.servants():
-                await servant.updateVoices(bar=bar(**bar_arguments) if bar is not None else None)
+                await servant.updateVoices(
+                    bar=bar(**bar_arguments) if bar is not None else None,
+                    convert_to_wav=convert_to_wav
+                )
         except:
             logger.warning(
                 "Exception during Downloader.recheckAllVoices(). "
@@ -641,9 +646,19 @@ class VoiceLine:
         return f"{self.anyName}{index}.mp3"
 
     @PropertyOneCall
+    def filename_wav(self) -> str:
+        """ Full file name in the destination folder with wav extension. Example: "Skill 1.wav" """
+        return f"{self.filename.rsplit('.', maxsplit=1)[0]}.wav"
+
+    @PropertyOneCall
     def path(self) -> Path:
         """ Full path to voice line"""
         return self.path_folder / self.filename
+
+    @PropertyOneCall
+    def path_wav(self) -> Path:
+        """ Full path to voice line in wav format"""
+        return self.path_folder / self.filename_wav
 
     @PropertyOneCall
     def index(self) -> int:
@@ -653,7 +668,17 @@ class VoiceLine:
 
     @property
     def loaded(self) -> bool:
-        """ Returns True if voice line downloaded """
+        """ Returns True if voice line downloaded in any format """
+        return self.loaded_wav or self.loaded_mp3
+
+    @property
+    def loaded_wav(self) -> bool:
+        """ Returns True if voice line wav variant exists """
+        return self.path_wav.exists()
+
+    @property
+    def loaded_mp3(self) -> bool:
+        """ Returns True if voice line mp3 variant exists """
         return self.path.exists()
 
     @PropertyOneCall
@@ -669,6 +694,7 @@ class VoiceLine:
         yield from self.dictionary['audioAssets']
 
     async def metadata_update(self) -> None:
+        assert self.path.exists()
         downloader = Downloader()
         _d3: eyed3.AudioFile | None = eyed3.load(str(self.path))
 
@@ -750,6 +776,40 @@ class VoiceLine:
 
         for source in source_paths:
             source.unlink()
+
+    def convert_to_wav(self, unlink_source: bool = True) -> None:
+        assert isinstance(unlink_source, bool)
+        assert self.loaded_mp3
+        assert not self.loaded_wav
+
+        command = (
+            f'{FFMPEG_PATH} -i "{self.filename}" '
+            "-acodec pcm_s16le -ar 22050 "
+            f'"{self.filename_wav}"'    
+        )
+        p = subprocess.Popen(
+            args=command,
+            cwd=self.path_folder,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        output, err = p.communicate(timeout=10)
+        ret = p.returncode
+        if ret != 0:
+            raise FFMPEGException(
+                "FFMpeg returned non-zero code. Leftovers left untouched. Additional info:"
+                "\n> Command: "  + command +
+                "\n> CWD: " + str(self.path_folder) + 
+                "\n> StdOut:" +
+                output.decode().replace('\n', '\n\t')
+                +
+                '\n> StdErr:' +
+                err.decode().replace('\n', '\n\t')
+            )
+
+        if unlink_source:
+            self.path.unlink()
 
     @staticmethod
     def _leftovers_delete(paths: list[Path]) -> None:
@@ -1037,7 +1097,12 @@ class ServantVoices:
             )
 
 
-    async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
+    async def updateVoices(
+            self,
+            bar: Bar | None = None,
+            message_size: int = 40,
+            convert_to_wav: bool = True
+        ) -> None:
         """ Main possible function for VoiceLine. Downloading current voice line
             with tracking progress with created Bar.
         :param bar: Created bar to track progress. None, if no progress track needed
@@ -1088,6 +1153,10 @@ class ServantVoices:
                             )[:message_size]
                             bar.index += 1
                         if voice_line.loaded:
+                            if convert_to_wav and not voice_line.loaded_wav:
+                                voice_line.convert_to_wav(unlink_source=True)
+                                assert not voice_line.loaded_mp3
+                                assert     voice_line.loaded_wav
                             continue
                         downloaded_counter += 1
                         try:
@@ -1105,6 +1174,14 @@ class ServantVoices:
                                 f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
                                 " == true"
                             )
+                        if convert_to_wav:
+                            voice_line.convert_to_wav(unlink_source=True)
+                            assert not voice_line.loaded_mp3
+                            assert     voice_line.loaded_wav
+                        else:
+                            assert     voice_line.loaded_mp3
+                            assert not voice_line.loaded_wav
+
                         if bar is not None:
                             bar.update()
 
