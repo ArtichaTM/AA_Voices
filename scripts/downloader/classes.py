@@ -18,6 +18,16 @@ from progress.bar import Bar
 from progress.spinner import Spinner
 import eyed3
 
+from settings import (
+    ExceptionType,
+    ALBUM_NAME,
+    SERVANT_EXCEPTIONS,
+    SERVANTS_FOLDER,
+    VOICES_FOLDER_NAME,
+    FFMPEG_PATH,
+    API_SERVER,
+)
+
 __all__ = (
     'NoVoiceLines',
     'Ascension',
@@ -25,7 +35,6 @@ __all__ = (
     'VoiceLine',
     'ServantVoices',
     'BasicServant',
-    'MAINDIR'
 )
 
 logger = getLogger('AA_voices_downloader')
@@ -131,11 +140,6 @@ class VoiceLineCategory(IntEnum):
                 return cls.EventDigging
             case _:
                 raise Exception(f"There's no such category: \"{value}\"")
-
-
-class ExceptionType(IntEnum):
-    NP_IN_BATTLE_SECTION = 0
-    SKIP_ON_DOWNLOAD_EXCEPTION = 1
 
 
 T = TypeVar('T')
@@ -300,22 +304,6 @@ class DeepComparer:
             assert isinstance(e.args[0], list)
             e.args[0].reverse()
 
-ALBUM_NAME = 'Fate: Grand Order Servants'
-MAINDIR = Path() / 'dataset'
-SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
-    66: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
-    , 153: {ExceptionType.NP_IN_BATTLE_SECTION, }
-    , 175: {ExceptionType.NP_IN_BATTLE_SECTION, }
-    , 177: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
-    , 178: {ExceptionType.NP_IN_BATTLE_SECTION, }
-    , 179: {ExceptionType.NP_IN_BATTLE_SECTION, }
-    , 182: {ExceptionType.NP_IN_BATTLE_SECTION, }
-    , 188: {ExceptionType.NP_IN_BATTLE_SECTION, }
-    , 189: {ExceptionType.NP_IN_BATTLE_SECTION, }
-    , 205: {ExceptionType.NP_IN_BATTLE_SECTION, }
-    , 339: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
-}
-
 class Downloader:
     """ Class for downloading data from atlas academy """
     __slots__ = (
@@ -323,10 +311,6 @@ class Downloader:
         'session', 'basic_servant', 'animation_bool', 'animation_speed'
     )
     _instance: 'Downloader | None' = None
-    API_SERVER: str = r'https://api.atlasacademy.io'
-    SERVANTS_FOLDER = MAINDIR / 'Servants'
-    VOICES_FOLDER_NAME = 'voices'
-    FFMPEG_PATH: str = 'ffmpeg'
 
     def __new__(cls, *args, **kwargs):
         if not isinstance(cls._instance, cls):
@@ -429,7 +413,7 @@ class Downloader:
         if address.startswith('https'):
             url: str = address
         else:
-            url: str = self.API_SERVER + address
+            url: str = API_SERVER + address
 
         while (time() - self.last_request) < self.delay:
             await asyncio.sleep(time() - self.last_request)
@@ -648,7 +632,7 @@ class VoiceLine:
     @PropertyOneCall
     def path_folder(self) -> Path:
         """ Path to folder containing voice line """
-        return Downloader.SERVANTS_FOLDER / str(self.servant_id) / Downloader.VOICES_FOLDER_NAME / \
+        return SERVANTS_FOLDER / str(self.servant_id) / VOICES_FOLDER_NAME / \
             self.ascension.name / self.type.name / self.dictionary['path_add']
 
     @PropertyOneCall
@@ -723,7 +707,7 @@ class VoiceLine:
         filenames = [i.name for i in source_paths]
 
         command = (
-            f"{Downloader.FFMPEG_PATH} -i \"concat:"
+            f"{FFMPEG_PATH} -i \"concat:"
             f"{'|'.join(filenames)}"
             '" -c copy '
             f'"{self.filename}"'
@@ -861,7 +845,7 @@ class ServantVoices:
     @PropertyOneCall
     def path(self) -> Path:
         """ Path to servant folder, containing JSON and voices folder"""
-        return Downloader.SERVANTS_FOLDER / str(self.collectionNo)
+        return SERVANTS_FOLDER / str(self.collectionNo)
 
     @PropertyOneCall
     def path_json(self) -> Path:
@@ -895,7 +879,7 @@ class ServantVoices:
     @classmethod
     async def _updateJSON(cls, collectionNo: int) -> None:
         """ Updates (replaces) current servant JSON """
-        servant_folder = Downloader.SERVANTS_FOLDER / f"{collectionNo}"
+        servant_folder = SERVANTS_FOLDER / f"{collectionNo}"
         servant_json_path = servant_folder / 'info.json'
         servant_json_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -912,7 +896,7 @@ class ServantVoices:
         :type id: int
         :return: _description_
         """
-        servant_folder = Downloader.SERVANTS_FOLDER / f"{collectionNo}"
+        servant_folder = SERVANTS_FOLDER / f"{collectionNo}"
         servant_json_path = servant_folder / 'info.json'
 
         while True:

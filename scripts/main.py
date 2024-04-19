@@ -1,3 +1,5 @@
+from downloader import Downloader, ServantVoices
+
 import logging
 from asyncio import run
 from datetime import datetime
@@ -6,15 +8,15 @@ from pathlib import Path
 from progress.bar import Bar
 from progress.spinner import Spinner
 
-from classes import Downloader
+from settings import LOGS_PATH
 
 def setUpLogger(level: int = logging.INFO) -> logging.Logger:
     logger = logging.getLogger('AA_voices_downloader')
     logger.setLevel(level=level)
     now = datetime.now()
-    Path('logs').mkdir(exist_ok=True)
+    LOGS_PATH.mkdir(exist_ok=True)
     logging.basicConfig(
-        filename=f"logs/{now.strftime('%y-%m-%d_%H-%M-%S')}.log",
+        filename=LOGS_PATH / f"{now.strftime('%y-%m-%d_%H-%M-%S')}.log",
         level=level,
         format='%(asctime)s:%(levelname)s:%(message)s'
     )
@@ -50,5 +52,6 @@ def main() -> None:
     finally:
         logger.info('Shutdown')
 
-if __name__ == '__main__':
-     main()
+
+if __name__  == '__main__':
+    main()
