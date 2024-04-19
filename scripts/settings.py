@@ -35,6 +35,7 @@ SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
     , 189: {ExceptionType.NP_IN_BATTLE_SECTION, }
     , 205: {ExceptionType.NP_IN_BATTLE_SECTION, }
     , 339: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
+    , 341: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
 }
 
 API_SERVER: str = r'https://api.atlasacademy.io'
