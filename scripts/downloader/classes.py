@@ -1,4 +1,4 @@
-from typing import Any, AsyncGenerator, Callable, Generator, TypeVar
+from typing import Any, AsyncGenerator, Generator
 import asyncio
 import threading
 import atexit
@@ -744,7 +744,7 @@ class VoiceLine:
         command = (
             f'{FFMPEG_PATH} -i "{self.filename}" '
             "-f pcm_s16le -acodec pcm_s16le -ar 22050 "
-            f'"{self.filename_wav}"'    
+            f'"{self.filename_wav}"'
         )
         p = subprocess.Popen(
             args=command,
