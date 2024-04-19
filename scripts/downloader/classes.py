@@ -734,7 +734,7 @@ class VoiceLine:
 
         command = (
             f'{FFMPEG_PATH} -i "{self.filename}" '
-            "-acodec pcm_s16le -ar 22050 "
+            "-f pcm_s16le -acodec pcm_s16le -ar 22050 "
             f'"{self.filename_wav}"'    
         )
         p = subprocess.Popen(
