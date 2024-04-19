@@ -14,7 +14,7 @@ def setUpLogger(level: int = logging.INFO) -> logging.Logger:
     now = datetime.now()
     Path('logs').mkdir(exist_ok=True)
     logging.basicConfig(
-        filename=f'logs/{now.strftime('%y-%m-%d_%H-%M-%S')}.log',
+        filename=f"logs/{now.strftime('%y-%m-%d_%H-%M-%S')}.log",
         level=level,
         format='%(asctime)s:%(levelname)s:%(message)s'
     )

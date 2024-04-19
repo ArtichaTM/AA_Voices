@@ -1,4 +1,4 @@
-from typing import Any, AsyncGenerator, Callable, Generator
+from typing import Any, AsyncGenerator, Callable, Generator, TypeVar
 import asyncio
 import threading
 import atexit
@@ -138,7 +138,8 @@ class ExceptionType(IntEnum):
     SKIP_ON_DOWNLOAD_EXCEPTION = 1
 
 
-class PropertyOneCall[T]:
+T = TypeVar('T')
+class PropertyOneCall:
     def __init__(self, fget: Callable[[Any], T] | None =None, fset=None, fdel=None, doc=None):
         self.fget = fget
         self.fset = fset
@@ -270,7 +271,7 @@ class DeepComparer:
                 raise
 
     @classmethod
-    def _deepCompareDict[T](
+    def _deepCompareDict(
         cls,
         left: dict[T, Any],
         right: dict[T, Any]
@@ -312,6 +313,7 @@ SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
     , 188: {ExceptionType.NP_IN_BATTLE_SECTION, }
     , 189: {ExceptionType.NP_IN_BATTLE_SECTION, }
     , 205: {ExceptionType.NP_IN_BATTLE_SECTION, }
+    , 339: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
 }
 
 class Downloader:
@@ -1047,7 +1049,7 @@ class ServantVoices:
         for duplicates in self._iterate_over_conflicts():
             print(
                 f"{self.collectionNo: >3}: "
-                f"{', '.join((f"{i.name} ({i.type})".ljust(50) for i in duplicates))}"
+                f"""{', '.join((f"{i.name} ({i.type})".ljust(50) for i in duplicates))}"""
                 f" points to one path {duplicates[0].path}"
             )
 
