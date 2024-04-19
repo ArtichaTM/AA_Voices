@@ -45,7 +45,7 @@ async def update_modified_date(path: Path):
     :param path: Target path
     """
     assert path.exists()
-    os.utime(path, (path.lstat().st_birthtime, time())) # type: ignore
+    os.utime(path, (path.lstat().st_ctime, time()))
 
 
 class NoVoiceLines(Exception):
