@@ -45,7 +45,7 @@ async def update_modified_date(path: Path):
     :param path: Target path
     """
     assert path.exists()
-    os.utime(path, (path.lstat().st_birthtime, time()))
+    os.utime(path, (path.lstat().st_birthtime, time())) # type: ignore
 
 
 class NoVoiceLines(Exception):
@@ -142,9 +142,8 @@ class VoiceLineCategory(IntEnum):
                 raise Exception(f"There's no such category: \"{value}\"")
 
 
-T = TypeVar('T')
 class PropertyOneCall:
-    def __init__(self, fget: Callable[[Any], T] | None =None, fset=None, fdel=None, doc=None):
+    def __init__(self, fget: Callable | None =None, fset=None, fdel=None, doc=None):
         self.fget = fget
         self.fset = fset
         self.fdel = fdel
@@ -156,7 +155,7 @@ class PropertyOneCall:
     def __set_name__(self, owner, name):
         self._name = name
 
-    def __get__(self, obj, *_) -> T:
+    def __get__(self, obj, *_):
         if self.fget is None:
             raise AttributeError(
                 f'property {self._name!r} of {type(obj).__name__!r} object has no getter'
@@ -268,7 +267,7 @@ class DeepComparer:
                 if lv != rv:
                     raise cls.DifferentValues([index])
             try:
-                method(lv, rv)
+                method(lv, rv) # type: ignore
             except cls.ComparerException as e:
                 assert isinstance(e.args[0], list)
                 e.args[0].append(index)
@@ -277,8 +276,8 @@ class DeepComparer:
     @classmethod
     def _deepCompareDict(
         cls,
-        left: dict[T, Any],
-        right: dict[T, Any]
+        left: dict,
+        right: dict
     ) -> None:
         if len(left) != len(right):
             raise cls.DifferentLength(len(left), len(right))
@@ -299,7 +298,7 @@ class DeepComparer:
             assert isinstance(self.right, list)
             method = self._deepCompareList
         try:
-            method(self.left, self.right)
+            method(self.left, self.right) # type: ignore
         except self.ComparerException as e:
             assert isinstance(e.args[0], list)
             e.args[0].reverse()
