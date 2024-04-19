@@ -300,7 +300,7 @@ class DeepComparer:
             e.args[0].reverse()
 
 ALBUM_NAME = 'Fate: Grand Order Servants'
-MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
+MAINDIR = Path() / 'dataset'
 SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
     66: {ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION, }
     , 153: {ExceptionType.NP_IN_BATTLE_SECTION, }

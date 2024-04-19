@@ -1,3 +1,3 @@
-VoicesDownloader/downloads/*
+dataset/*
 __pycache__
 logs/*
