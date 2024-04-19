@@ -142,56 +142,6 @@ class VoiceLineCategory(IntEnum):
                 raise Exception(f"There's no such category: \"{value}\"")
 
 
-class PropertyOneCall:
-    def __init__(self, fget: Callable | None =None, fset=None, fdel=None, doc=None):
-        self.fget = fget
-        self.fset = fset
-        self.fdel = fdel
-        if doc is None and fget is not None:
-            doc = fget.__doc__
-        self.__doc__ = doc
-        self._name = ''
-
-    def __set_name__(self, owner, name):
-        self._name = name
-
-    def __get__(self, obj, *_):
-        if self.fget is None:
-            raise AttributeError(
-                f'property {self._name!r} of {type(obj).__name__!r} object has no getter'
-             )
-        return self.fget(obj)
-
-    def __set__(self, obj, value):
-        if self.fset is None:
-            raise AttributeError(
-                f'property {self._name!r} of {type(obj).__name__!r} object has no setter'
-             )
-        self.fset(obj, value)
-
-    def __delete__(self, obj):
-        if self.fdel is None:
-            raise AttributeError(
-                f'property {self._name!r} of {type(obj).__name__!r} object has no deleter'
-             )
-        self.fdel(obj)
-
-    def getter(self, fget):
-        prop = type(self)(fget, self.fset, self.fdel, self.__doc__)
-        prop._name = self._name
-        return prop
-
-    def setter(self, fset):
-        prop = type(self)(self.fget, fset, self.fdel, self.__doc__)
-        prop._name = self._name
-        return prop
-
-    def deleter(self, fdel):
-        prop = type(self)(self.fget, self.fset, fdel, self.__doc__)
-        prop._name = self._name
-        return prop
-
-
 class DeepComparer:
     __slots__ = ('left', 'right')
 
@@ -597,70 +547,70 @@ class VoiceLine:
     def __repr__(self) -> str:
         return f"<VL {self.name} for {self.ascension}>"
 
-    @PropertyOneCall
+    @property
     def servant_id(self) -> int:
         assert 'svt_id' in self.dictionary
         return self.dictionary['svt_id']
 
-    @PropertyOneCall
+    @property
     def servant_name(self) -> int:
         assert 'svt_name' in self.dictionary
         return self.dictionary['svt_name']
 
-    @PropertyOneCall
+    @property
     def ascension(self) -> Ascension:
         assert 'ascension' in self.dictionary
         return self.dictionary['ascension']
 
-    @PropertyOneCall
+    @property
     def type(self) -> VoiceLineCategory:
         assert 'svtVoiceType' in self.dictionary
         assert isinstance(self.dictionary['svtVoiceType'], VoiceLineCategory)
         return self.dictionary['svtVoiceType']
 
-    @PropertyOneCall
+    @property
     def name(self) -> str:
         assert 'name' in self.dictionary
         return self.dictionary['name']
 
-    @PropertyOneCall
+    @property
     def overwriteName(self) -> str:
         assert 'overwriteName' in self.dictionary
         return self.dictionary['overwriteName']
 
-    @PropertyOneCall
+    @property
     def anyName(self) -> str:
         """ Guarantee to return any name string """
         return self.overwriteName if self.overwriteName else self.name
 
-    @PropertyOneCall
+    @property
     def path_folder(self) -> Path:
         """ Path to folder containing voice line """
         return SERVANTS_FOLDER / str(self.servant_id) / VOICES_FOLDER_NAME / \
             self.ascension.name / self.type.name / self.dictionary['path_add']
 
-    @PropertyOneCall
+    @property
     def filename(self) -> str:
         """ Full file name in the destination folder. Example: "Skill 1.mp4" """
         index = '' if self.index == -1 else f" {self.index+1}"
         return f"{self.anyName}{index}.mp3"
 
-    @PropertyOneCall
+    @property
     def filename_wav(self) -> str:
         """ Full file name in the destination folder with wav extension. Example: "Skill 1.wav" """
         return f"{self.filename.rsplit('.', maxsplit=1)[0]}.wav"
 
-    @PropertyOneCall
+    @property
     def path(self) -> Path:
         """ Full path to voice line"""
         return self.path_folder / self.filename
 
-    @PropertyOneCall
+    @property
     def path_wav(self) -> Path:
         """ Full path to voice line in wav format"""
         return self.path_folder / self.filename_wav
 
-    @PropertyOneCall
+    @property
     def index(self) -> int:
         """ Index of the voice line. index != -1 only if "{0}" in overwriteName """
         assert isinstance(self.dictionary['_index'], int)
@@ -681,7 +631,7 @@ class VoiceLine:
         """ Returns True if voice line mp3 variant exists """
         return self.path.exists()
 
-    @PropertyOneCall
+    @property
     def subtitle(self) -> str:
         """ Text of the voice line [ENG]"""
         assert 'subtitle' in self.dictionary
@@ -901,17 +851,17 @@ class ServantVoices:
     def __repr__(self) -> str:
         return f"<Svt {self.collectionNo}" + (' with voice lines' if self.voice_lines else '') + '>'
 
-    @PropertyOneCall
+    @property
     def path(self) -> Path:
         """ Path to servant folder, containing JSON and voices folder"""
         return SERVANTS_FOLDER / str(self.collectionNo)
 
-    @PropertyOneCall
+    @property
     def path_json(self) -> Path:
         """ Path to servant JSON """
         return self.path / 'info.json'
 
-    @PropertyOneCall
+    @property
     def path_voices(self) -> Path:
         """ Path to servant voices folder (contains voice lines)"""
         return self.path / 'voices'
