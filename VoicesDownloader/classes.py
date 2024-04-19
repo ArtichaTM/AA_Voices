@@ -187,6 +187,118 @@ class PropertyOneCall[T]:
         prop._name = self._name
         return prop
 
+
+class DeepComparer:
+    __slots__ = ('left', 'right')
+
+    class ComparerException(Exception):
+        """
+        Base exception for all DeepComparer exceptions
+        Arguments: reaching_keys: list, *
+        """
+        def _path(self) -> str:
+            assert isinstance(self.args[0], list)
+            return f"values[{']['.join((str(i) for i in self.args[0]))}]"
+        def prettify(self) -> str:
+            raise NotImplementedError()
+
+    class DifferentLength(ComparerException):
+        """
+        Collections in the same position have different size.
+        """
+        def prettify(self) -> str:
+            assert isinstance(self.args[0], list)
+            assert isinstance(self.args[1], int)
+            assert isinstance(self.args[2], int)
+            return f"In {self._path()} {self.args[1]} != {self.args[2]}"
+
+    class DifferentTypes(ComparerException):
+        """
+        Objects in the same position have different types.
+        """
+        def prettify(self) -> str:
+            assert isinstance(self.args[0], list)
+            assert isinstance(self.args[1], type)
+            assert isinstance(self.args[2], type)
+            return f"In {self._path()} {self.args[1]} != {self.args[2]}"
+
+    class DifferentDictKeys(ComparerException):
+        """
+        Objects in the same position have different keys.
+        """
+        def prettify(self) -> str:
+            assert isinstance(self.args[0], list)
+            return f"In {self._path()} {self.args[1]} != {self.args[2]}"
+
+    class DifferentValues(ComparerException):
+        """
+        Objects in the same position have different values and they are not dict|list.
+        """
+        def prettify(self) -> str:
+            assert isinstance(self.args[0], list)
+            return f"In {self._path()} {self.args[1]} != {self.args[2]}"
+
+
+    def __init__(self, left: dict | list, right: dict | list) -> None:
+        assert isinstance(left, (dict, list)), 'Only list or dict supported'
+        assert isinstance(right, (dict, list)), 'Only list or dict supported'
+        assert isinstance(left, type(right)), 'Right and red must be same type'
+        self.left = left
+        self.right = right
+
+    @classmethod
+    def _deepCompareList(cls, left: list, right: list) -> None:
+        if len(left) != len(right):
+            raise cls.DifferentLength([], len(left), len(right))
+        for index, (lv, rv) in enumerate(zip(left, right)):
+            if isinstance(lv, list):
+                if not isinstance(rv, list):
+                    raise cls.DifferentTypes([index])
+                method = cls._deepCompareList
+            elif isinstance(lv, dict):
+                if not isinstance(rv, dict):
+                    raise cls.DifferentTypes([index])
+                method = cls._deepCompareDict
+            else:
+                if lv != rv:
+                    raise cls.DifferentValues([index])
+            try:
+                method(lv, rv)
+            except cls.ComparerException as e:
+                assert isinstance(e.args[0], list)
+                e.args[0].append(index)
+                raise
+
+    @classmethod
+    def _deepCompareDict[T](
+        cls,
+        left: dict[T, Any],
+        right: dict[T, Any]
+    ) -> None:
+        if len(left) != len(right):
+            raise cls.DifferentLength(len(left), len(right))
+        for (lk, lv), (rk, rv) in zip(left.items(), right.items()):
+            assert not isinstance(lk, (dict, list)), "How?"
+            assert not isinstance(rk, (dict, list)), "How?"
+            if lk != rk:
+                raise cls.DifferentDictKeys([], lk, rk)
+            if lv != rv:
+                raise cls.DifferentValues([lk], lv, rv)
+
+    def compare(self) -> None:
+        if isinstance(self.left, dict):
+            assert isinstance(self.right, dict)
+            method = self._deepCompareDict
+        else:
+            assert isinstance(self.left, list)
+            assert isinstance(self.right, list)
+            method = self._deepCompareList
+        try:
+            method(self.left, self.right)
+        except self.ComparerException as e:
+            assert isinstance(e.args[0], list)
+            e.args[0].reverse()
+
 ALBUM_NAME = 'Fate: Grand Order Servants'
 MAINDIR = Path() / 'VoicesDownloader' / 'downloads'
 SERVANT_EXCEPTIONS: dict[int, set[ExceptionType]] = {
@@ -939,6 +1051,7 @@ class ServantVoices:
                 f" points to one path {duplicates[0].path}"
             )
 
+
     async def updateVoices(self, bar: Bar | None = None, message_size: int = 40) -> None:
         """ Main possible function for VoiceLine. Downloading current voice line
             with tracking progress with created Bar.
@@ -958,10 +1071,14 @@ class ServantVoices:
             logger.info(f'S{self.collectionNo}: folder modified before NA patch')
             current_json = json.loads(self.path_json.read_text(encoding='utf-8'))
             new_json = await self._get_json(self.collectionNo)
-            if current_json != new_json:
-                logger.info(f'S{self.collectionNo}: New JSON different from old')
+            comparer = DeepComparer(current_json, new_json)
+            try:
+                comparer.compare()
+            except comparer.ComparerException as e:
+                logger.info(f'S{self.collectionNo}: New JSON different from old. Where: {e.prettify()}')
                 shutil.rmtree(self.path_voices)
             else:
+                logger.info(f'S{self.collectionNo}: New JSON same as old')
                 asyncio.create_task(update_modified_date(self.path))
         logger.debug(f'Started updating {self.collectionNo} voices')
         self.path_voices.mkdir(parents=False, exist_ok=True)
