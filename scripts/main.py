@@ -1,9 +1,8 @@
-from downloader import Downloader, ServantVoices
+from downloader import Downloader
 
 import logging
 from asyncio import run
 from datetime import datetime
-from pathlib import Path
 
 from progress.bar import Bar
 from progress.spinner import Spinner
@@ -37,7 +36,7 @@ async def amain():
     )
     # await downloader.recheckAllVoices()
     # await downloader._print_all_conflicts()
-    # await downloader.buildDataset(bar=Bar())
+    await downloader.buildDataset(bar=Bar())
 
     # from classes import ServantVoices
     # servant = await ServantVoices.load()
@@ -46,8 +45,8 @@ async def amain():
     # await servant.updateVoices()
     # servant._print_conflicts()
 
-    # from ai.training import main as train_main
-    # train_main()
+    from ai.training import main as train_main
+    train_main()
 
 
 def main() -> None:

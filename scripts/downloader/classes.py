@@ -521,6 +521,7 @@ class Downloader:
         with open(metadata_path, 'w', encoding='utf-8') as f:
             async for servant in self.servants(buildVoiceLines=True):
                 bar.next()
+                index = 0
                 for index, voice_line in enumerate(servant.loadedVoicesWAV(), start=1):
                     subtitle = voice_line.subtitle.replace('\n', '. ')
                     voice_line_path = wavs_path / f"LJ{voice_line.servant_id:0>3}-{index:0>4}.wav"
@@ -786,7 +787,7 @@ class VoiceLine:
 
         command = (
             f'{FFMPEG_PATH} -i "{self.filename}" '
-            "-f s16le -acodec pcm_s16le -ar 22050 "
+            "-acodec pcm_s16le -ar 22050 "
             f'"{self.filename_wav}"'
         )
         p = subprocess.Popen(
