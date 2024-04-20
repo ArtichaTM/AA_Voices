@@ -33,10 +33,12 @@ async def amain():
         bar=Bar,
         spinner=Spinner,
         save_wav=True,
-        save_mp3=True
+        save_mp3=True,
+        fast=True
     )
     # await downloader.recheckAllVoices()
     # await downloader._print_all_conflicts()
+    # await downloader.buildDataset(bar=Bar())
 
     # from classes import ServantVoices
     # servant = await ServantVoices.load()

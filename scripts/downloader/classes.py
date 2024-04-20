@@ -23,6 +23,7 @@ from settings import (
     ALBUM_NAME,
     SERVANT_EXCEPTIONS,
     SERVANTS_FOLDER,
+    DATASET_DIR,
     VOICES_FOLDER_NAME,
     FFMPEG_PATH,
     API_SERVER,
@@ -300,7 +301,7 @@ class Downloader:
             buildVoiceLines: bool = True,
             updateVoices: bool = False
         ) -> AsyncGenerator['ServantVoices', None]:
-        """ Prints in stdin all path conflicts for all servants """
+        """ Iteration over all existing servants """
         assert self.session is not None, "Instance destroyed"
         await self.updateBasicServant()
         assert isinstance(self.basic_servant, BasicServant)
@@ -488,6 +489,43 @@ class Downloader:
                 f"Updated {servant.collectionNo}/{self.basic_servant.collectionNoMax} servants"
             )
             raise
+
+    async def buildDataset(self, bar: Bar, replace_ok: bool = True) -> None:
+        logger.info("Requested dataset build")
+        await self.updateBasicServant()
+        assert isinstance(self.basic_servant, BasicServant)
+        bar.max = self.basic_servant.collectionNoMax
+        bar.message = 'Building Dataset'
+        metadata_path = DATASET_DIR / 'metadata.csv'
+        if metadata_path.exists():
+            if not replace_ok:
+                raise OSError("Can't overwrite file when replace_ok=False")
+            metadata_path.unlink()
+        wavs_path = metadata_path.parent / 'wavs'
+        if wavs_path.exists():
+            if replace_ok:
+                shutil.rmtree(wavs_path)
+            else:
+                try:
+                    next(wavs_path.iterdir())
+                except StopIteration:
+                    raise OSError("Can't overwrite wavs folder when replace_ok=False")
+        wavs_path.mkdir(exist_ok=False)
+        counter_voice_line = 0
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            async for servant in self.servants(buildVoiceLines=True):
+                bar.next()
+                for index, voice_line in enumerate(servant.loadedVoicesWAV(), start=1):
+                    subtitle = voice_line.subtitle.replace('\n', '. ')
+                    voice_line_path = wavs_path / f"LJ{voice_line.servant_id:0>3}-{index:0>4}.wav"
+                    assert not voice_line_path.exists()
+                    shutil.copyfile(voice_line.path_wav, voice_line_path)
+                    f.write(
+                        f"{voice_line_path.stem}|{subtitle}\n"
+                    )
+                counter_voice_line += index
+        logger.info(f"Metadata build finished. Saved {counter_voice_line} voice lines among {self.basic_servant.collectionNoMax} servants")
+
 
     def destroy(self) -> None:
         """ Deletes current instance """
@@ -1023,10 +1061,10 @@ class ServantVoices:
                     for voice_line in type_values:
                         yield voice_line
 
-    def loadedVoices(self) -> Generator[VoiceLine, None, None]:
-        """ Iterates over all possible, correct and downloaded voice lines"""
+    def loadedVoicesWAV(self) -> Generator[VoiceLine, None, None]:
+        """ Iterates over all downloaded as WAV files"""
         for voice_line in self.allVoices():
-            if voice_line.loaded:
+            if voice_line.loaded_wav:
                 yield voice_line
 
     def _iterate_over_conflicts(self) -> Generator[list[VoiceLine], None, None]:
@@ -1061,7 +1099,7 @@ class ServantVoices:
             bar: Bar | None = None,
             message_size: int = 40,
             save_mp3: bool = True,
-            save_wav: bool = True
+            save_wav: bool = True,
         ) -> None:
         """ Main possible function for VoiceLine. Downloading current voice line
             with tracking progress with created Bar.
