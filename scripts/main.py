@@ -16,9 +16,9 @@ def setUpLogger(level: int = logging.INFO) -> logging.Logger:
     now = datetime.now()
     LOGS_PATH.mkdir(exist_ok=True)
     logging.basicConfig(
-        filename=LOGS_PATH / f"{now.strftime('%y-%m-%d_%H-%M-%S')}.log",
-        level=level,
-        format='%(asctime)s:%(levelname)s:%(message)s'
+        filename=LOGS_PATH / f"{now.strftime('%y-%m-%d_%H-%M-%S')}.log"
+        , level=level
+        , format='%(asctime)s:%(levelname)s:%(message)s'
     )
     return logger
 
@@ -30,11 +30,10 @@ async def amain():
     logger.info('Downloader initialized')
 
     await downloader.recheckAllVoices(
-        bar=Bar,
-        spinner=Spinner,
-        save_wav=True,
-        save_mp3=True,
-        fast=True
+        bar=Bar
+        , spinner=Spinner
+        , save_wav=True
+        , save_mp3=True
     )
     # await downloader.recheckAllVoices()
     # await downloader._print_all_conflicts()
@@ -46,6 +45,10 @@ async def amain():
     # await servant.updateVoices(bar=Bar())
     # await servant.updateVoices()
     # servant._print_conflicts()
+
+    # from ai.training import main as train_main
+    # train_main()
+
 
 def main() -> None:
     logger = logging.getLogger('AA_voices_downloader')

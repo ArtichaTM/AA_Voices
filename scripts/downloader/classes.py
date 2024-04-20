@@ -299,13 +299,16 @@ class Downloader:
     async def servants(
             self,
             buildVoiceLines: bool = True,
-            updateVoices: bool = False
+            updateVoices: bool = False,
+            skip_exception_servants: bool = False
         ) -> AsyncGenerator['ServantVoices', None]:
         """ Iteration over all existing servants """
         assert self.session is not None, "Instance destroyed"
         await self.updateBasicServant()
         assert isinstance(self.basic_servant, BasicServant)
         for i in range(1, self.basic_servant.collectionNoMax+1):
+            if i in SERVANT_EXCEPTIONS and skip_exception_servants:
+                continue
             voices = await ServantVoices.load(i)
             if buildVoiceLines:
                 voices.buildVoiceLinesDict(fill_all_ascensions=False)
@@ -427,12 +430,13 @@ class Downloader:
         save_path.write_bytes(raw_json)
 
     async def recheckAllVoices(
-            self,
-            bar: type[Bar] | None = None,
-            bar_arguments: dict | None = None,
-            spinner: type[Spinner] | None= None,
-            save_mp3: bool = False,
-            save_wav: bool = True
+            self
+            , bar: type[Bar] | None = None
+            , bar_arguments: dict | None = None
+            , spinner: type[Spinner] | None= None
+            , save_mp3: bool = False
+            , save_wav: bool = True
+            , skip_exception_servants: bool = False
         ) -> None:
         """ Starts job to check all missing voice lines and their download
         :param bar: Bar class to track current progress.
@@ -443,6 +447,8 @@ class Downloader:
             if False, save_wav should be True
         :param save_wav: Store voice_line in wav (pcm_s16le)
             if False, save_mp3 should be True
+        :param skip_exception_servants: Skips servants with exceptions,
+            which tremendously increases check speed
         :raises DownloadException: Raised when during downloading one of voice lines or JSON
             something went wrong. Usually when on AA voices lines bugged
         :raises FFMPEGException: Raised when FFMpeg returned exception when shouldn't
@@ -477,11 +483,11 @@ class Downloader:
             thread.join()
             spin.finish()
         try:
-            async for servant in self.servants():
+            async for servant in self.servants(skip_exception_servants=skip_exception_servants):
                 await servant.updateVoices(
-                    bar=bar(**bar_arguments) if bar is not None else None,
-                    save_mp3=save_mp3,
-                    save_wav=save_wav
+                    bar=bar(**bar_arguments) if bar is not None else None
+                    , save_mp3=save_mp3
+                    , save_wav=save_wav
                 )
         except:
             logger.warning(
@@ -521,11 +527,10 @@ class Downloader:
                     assert not voice_line_path.exists()
                     shutil.copyfile(voice_line.path_wav, voice_line_path)
                     f.write(
-                        f"{voice_line_path.stem}|{subtitle}\n"
+                        f"{voice_line_path.stem}|{subtitle}|{subtitle}\n"
                     )
                 counter_voice_line += index
         logger.info(f"Metadata build finished. Saved {counter_voice_line} voice lines among {self.basic_servant.collectionNoMax} servants")
-
 
     def destroy(self) -> None:
         """ Deletes current instance """
@@ -712,8 +717,8 @@ class VoiceLine:
 
 
     def concat_mp3(
-        self,
-        source_paths: list[Path]
+        self
+        , source_paths: list[Path]
     ) -> None:
         """ Generates current voice_line from sources
         When FFMpeg fails, method checks source files for JSON readability.
@@ -735,11 +740,11 @@ class VoiceLine:
             f'"{self.filename}"'
         )
         p = subprocess.Popen(
-            args=command,
-            cwd=self.path_folder,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            args=command
+            , cwd=self.path_folder
+            , stdin=subprocess.DEVNULL
+            , stdout=subprocess.PIPE
+            , stderr=subprocess.PIPE
         )
         output, err = p.communicate(timeout=10)
         ret = p.returncode
@@ -785,11 +790,11 @@ class VoiceLine:
             f'"{self.filename_wav}"'
         )
         p = subprocess.Popen(
-            args=command,
-            cwd=self.path_folder,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            args=command
+            , cwd=self.path_folder
+            , stdin=subprocess.DEVNULL
+            , stdout=subprocess.PIPE
+            , stderr=subprocess.PIPE
         )
         output, err = p.communicate(timeout=10)
         ret = p.returncode
@@ -1039,7 +1044,7 @@ class ServantVoices:
                 for ascension_values in self.voice_lines.values():
                     category = ascension_values[VoiceLineCategory.Battle]
                     to_pop = []
-                    for name, voice_lines in category.items():
+                    for name in category:
                         if all((
                             'Noble Phantasm' in name,
                             'Card' not in name
@@ -1095,11 +1100,11 @@ class ServantVoices:
 
 
     async def updateVoices(
-            self,
-            bar: Bar | None = None,
-            message_size: int = 40,
-            save_mp3: bool = True,
-            save_wav: bool = True,
+            self
+            , bar: Bar | None = None
+            , message_size: int = 40
+            , save_mp3: bool = True
+            , save_wav: bool = True
         ) -> None:
         """ Main possible function for VoiceLine. Downloading current voice line
             with tracking progress with created Bar.
@@ -1146,10 +1151,10 @@ class ServantVoices:
             for category_values in ascension_values.values():
                 for type_values in category_values.values():
                     for voice_line in type_values:
-                        load_mp3 = save_mp3 and not voice_line.loaded_mp3
-                        load_wav = save_wav and not voice_line.loaded_wav
                         if bar is not None:
                             bar.index += 1
+                        load_mp3 = save_mp3 and not voice_line.loaded_mp3
+                        load_wav = save_wav and not voice_line.loaded_wav
                         if not load_mp3 and not load_wav:
                             continue
                         if bar is not None:
