@@ -496,7 +496,7 @@ class Downloader:
             )
             raise
 
-    async def buildDataset(self, bar: Bar, replace_ok: bool = True) -> None:
+    async def buildDatasetLJSpeech(self, bar: Bar, replace_ok: bool = True) -> None:
         logger.info("Requested dataset build")
         await self.updateBasicServant()
         assert isinstance(self.basic_servant, BasicServant)
