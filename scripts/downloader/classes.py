@@ -539,11 +539,10 @@ class Downloader:
                 counter_voice_line += index
         logger.info(f"Metadata build finished. Saved {counter_voice_line} voice lines among {self.basic_servant.collectionNoMax} servants")
 
-    async def buildDatasetVCTK(self, bar: Bar, replace_ok: bool = True, concurrent_workers: int = 4) -> None:
+    async def buildDatasetVCTK(self, bar: Bar, replace_ok: bool = True, ffmpeg_params: str = '') -> None:
         assert isinstance(bar, Bar)
         assert isinstance(replace_ok, bool)
-        assert isinstance(concurrent_workers, int)
-        assert concurrent_workers > 0
+        assert isinstance(ffmpeg_params, str)
         logger.info("Requested dataset build in VCTK format")
         await self.updateBasicServant()
         assert isinstance(self.basic_servant, BasicServant)
@@ -584,8 +583,6 @@ class Downloader:
 
         counter_all_voices = 0
         async for servant in self.servants():
-            # if (servant.collectionNo not in {45, 46, 100, 120, 300, 110, 340, 334, 328, 326, 314}):
-            #     continue
             bar.message = f"Converting {servant.defaultName()}"[:40].ljust(40).replace('\n', '')
             bar.update()
             path_servant_flacs = wavs_path / str(servant.collectionNo)
@@ -605,7 +602,7 @@ class Downloader:
                 counter_all_voices += 1
                 voice_line_counter += 1
                 filename = f'{servant.collectionNo}_{voice_line_counter:0>3}'
-                old_flac_path = voice_line.convert('-f flac', extension='flac')
+                old_flac_path = voice_line.convert('-f flac -ar 16000', extension='flac')
                 target_txt_path = path_servant_txts / f"{filename}.txt"
                 target_flac_path = path_servant_flacs / f"{filename}_mic1.flac"
                 try:

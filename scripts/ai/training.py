@@ -22,18 +22,18 @@ torch.set_num_threads(24)
     If you are interested in multilingual training, we have commented on parameters on the VitsArgs class instance that should be enabled for multilingual training.
     In addition, you will need to add the extra datasets following the VCTK as an example.
 """
-CURRENT_PATH = (Path(__file__) / '..' / '..' / '..' / 'training').resolve()
+ROOT_PATH = (Path(__file__) / '..' / '..' / '..').resolve()
 
 # Name of the run for the Trainer
-RUN_NAME = "YourTTS-EN-VCTK"
+RUN_NAME = "AAVoices"
 
 # Path where you want to save the models outputs (configs, checkpoints and tensorboard logs)
-OUT_PATH = str(CURRENT_PATH) # "/raid/coqui/Checkpoints/original-YourTTS/"
+OUT_PATH = ROOT_PATH / 'training'  # "/raid/coqui/Checkpoints/original-YourTTS/"
 
 # If you want to do transfer learning and speedup your training you can set here the path to the original YourTTS model
 RESTORE_PATH = None  # "/root/.local/share/tts/tts_models--multilingual--multi-dataset--your_tts/model_file.pth"
 
-# This parameter is useful to debug, it skips the training epochs and just do the evaluation  and produce the test sentences
+# This paramter is useful to debug, it skips the training epochs and just do the evaluation  and produce the test sentences
 SKIP_TRAIN_EPOCH = False
 
 # Set here the batch size to be used in training and evaluation
@@ -47,11 +47,11 @@ SAMPLE_RATE = 16000
 MAX_AUDIO_LEN_IN_SECONDS = 10
 
 ### Download VCTK dataset
-VCTK_DOWNLOAD_PATH = os.path.join(CURRENT_PATH, "VCTK")
+VCTK_PATH = ROOT_PATH / 'dataset' / 'vctk'
 # Define the number of threads used during the audio resampling
 NUM_RESAMPLE_THREADS = 10
 # Check if VCTK dataset is not already downloaded, if not download it
-resample_files(VCTK_DOWNLOAD_PATH, SAMPLE_RATE, file_ext="flac", n_jobs=NUM_RESAMPLE_THREADS)
+resample_files(VCTK_PATH, SAMPLE_RATE, file_ext="flac", n_jobs=NUM_RESAMPLE_THREADS)
 
 # init configs
 vctk_config = BaseDatasetConfig(
@@ -59,20 +59,20 @@ vctk_config = BaseDatasetConfig(
     dataset_name="vctk",
     meta_file_train="",
     meta_file_val="",
-    path=VCTK_DOWNLOAD_PATH,
+    path=VCTK_PATH.resolve().__str__(),
     language="en",
     ignored_speakers=[
-        "p261",
-        "p225",
-        "p294",
-        "p347",
-        "p238",
-        "p234",
-        "p248",
-        "p335",
-        "p245",
-        "p326",
-        "p302",
+        # "p261",
+        # "p225",
+        # "p294",
+        # "p347",
+        # "p238",
+        # "p234",
+        # "p248",
+        # "p335",
+        # "p245",
+        # "p326",
+        # "p302",
     ],  # Ignore the test speakers to full replicate the paper experiment
 )
 
@@ -90,13 +90,13 @@ D_VECTOR_FILES = []  # List of speaker embeddings/d-vectors to be used during th
 # Iterates all the dataset configs checking if the speakers embeddings are already computated, if not compute it
 for dataset_conf in DATASETS_CONFIG_LIST:
     # Check if the embeddings weren't already computed, if not compute it
-    embeddings_file = os.path.join(dataset_conf.path, "speakers.pth")
-    if not os.path.isfile(embeddings_file):
+    embeddings_file = VCTK_PATH / "speakers.pth"
+    if not embeddings_file.exists():
         print(f">>> Computing the speaker embeddings for the {dataset_conf.dataset_name} dataset")
         compute_embeddings(
             SPEAKER_ENCODER_CHECKPOINT_PATH,
             SPEAKER_ENCODER_CONFIG_PATH,
-            embeddings_file,
+            str(embeddings_file),
             old_speakers_file=None,
             config_dataset_path=None,
             formatter_name=dataset_conf.formatter,
@@ -107,7 +107,7 @@ for dataset_conf in DATASETS_CONFIG_LIST:
             disable_cuda=False,
             no_eval=False,
         )
-    D_VECTOR_FILES.append(embeddings_file)
+    D_VECTOR_FILES.append(str(embeddings_file))
 
 
 # Audio config used in training.
@@ -139,13 +139,11 @@ model_args = VitsArgs(
 
 # General training config, here you can change the batch size and others useful parameters
 config = VitsConfig(
-    output_path=OUT_PATH,
+    output_path=str(OUT_PATH),
     model_args=model_args,
     run_name=RUN_NAME,
-    project_name="YourTTS",
-    run_description="""
-            - Original YourTTS trained using VCTK dataset
-        """,
+    project_name=RUN_NAME,
+    run_description="Servant voices replication",
     dashboard_logger="tensorboard",
     logger_uri=None,
     audio=audio_config,
@@ -164,7 +162,7 @@ config = VitsConfig(
     print_eval=False,
     use_phonemes=False,
     phonemizer="espeak",
-    phoneme_language="en",
+    phoneme_language="en-US",
     compute_input_seq_cache=True,
     add_blank=True,
     text_cleaner="multilingual_cleaners",
@@ -189,35 +187,35 @@ config = VitsConfig(
     mixed_precision=False,
     test_sentences=[
         [
-            "It took me quite a long time to develop a voice, and now that I have it I'm not going to be silent.",
-            "VCTK_p277",
+            "Mock them♡",
+            "VCTK_334",
             None,
             "en",
         ],
         [
-            "Be a voice, not an echo.",
-            "VCTK_p239",
+            "I shall devour them all!",
+            "VCTK_334",
             None,
             "en",
         ],
         [
-            "I'm sorry Dave. I'm afraid I can't do that.",
-            "VCTK_p258",
+            "O improbable fae king...",
+            "VCTK_284",
             None,
             "en",
         ],
         [
-            "This cake is great. It's so delicious and moist.",
-            "VCTK_p244",
+            "Both: We will not lose!",
+            "VCTK_337",
             None,
             "en",
         ],
         [
-            "Prior to November 22, 1963.",
-            "VCTK_p305",
+            "Sooo cute! Trưng Nhị: You too, my sister.",
+            "VCTK_337",
             None,
             "en",
-        ],
+        ]
     ],
     # Enable the weighted sampler
     use_weighted_sampler=True,
@@ -241,9 +239,9 @@ model = Vits.init_from_config(config)
 
 # Init the trainer and 🚀
 trainer = Trainer(
-    TrainerArgs(restore_path=RESTORE_PATH, skip_train_epoch=SKIP_TRAIN_EPOCH),
+    TrainerArgs(restore_path=RESTORE_PATH, skip_train_epoch=SKIP_TRAIN_EPOCH), # type: ignore
     config,
-    output_path=OUT_PATH,
+    output_path=str(OUT_PATH),
     model=model,
     train_samples=train_samples,
     eval_samples=eval_samples,

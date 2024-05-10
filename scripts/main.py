@@ -32,7 +32,7 @@ async def amain():
     #     bar=Bar
     #     , spinner=Spinner
     # )
-    await downloader.buildDatasetVCTK(Bar(), replace_ok=False, concurrent_workers=4)
+    await downloader.buildDatasetVCTK(Bar(), replace_ok=False)
     # await downloader.recheckAllVoices()
     # await downloader._print_all_conflicts()
 
