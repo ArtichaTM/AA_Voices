@@ -584,6 +584,8 @@ class Downloader:
 
         counter_all_voices = 0
         async for servant in self.servants():
+            # if (servant.collectionNo not in {45, 46, 100, 120, 300, 110, 340, 334, 328, 326, 314}):
+            #     continue
             bar.message = f"Converting {servant.defaultName()}"[:40].ljust(40).replace('\n', '')
             bar.update()
             path_servant_flacs = wavs_path / str(servant.collectionNo)
