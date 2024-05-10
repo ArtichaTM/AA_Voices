@@ -1,3 +1,4 @@
+import concurrent.futures
 from typing import Any, AsyncGenerator, Generator
 import asyncio
 import threading
@@ -434,8 +435,6 @@ class Downloader:
             , bar: type[Bar] | None = None
             , bar_arguments: dict | None = None
             , spinner: type[Spinner] | None= None
-            , save_mp3: bool = False
-            , save_wav: bool = True
             , skip_exception_servants: bool = False
         ) -> None:
         """ Starts job to check all missing voice lines and their download
@@ -456,9 +455,6 @@ class Downloader:
         assert self.session is not None, "Instance destroyed"
         assert bar is None or issubclass(bar, Bar)
         assert bar_arguments is None or isinstance(bar, dict)
-        assert isinstance(save_mp3, bool)
-        assert isinstance(save_wav, bool)
-        assert save_mp3 or save_wav
         logger.info(f'Launching Downloader.recheckAllVoices(bar={bar})')
         if bar_arguments is None: bar_arguments = dict()
 
@@ -486,8 +482,6 @@ class Downloader:
             async for servant in self.servants(skip_exception_servants=skip_exception_servants):
                 await servant.updateVoices(
                     bar=bar(**bar_arguments) if bar is not None else None
-                    , save_mp3=save_mp3
-                    , save_wav=save_wav
                 )
         except:
             logger.warning(
@@ -496,8 +490,20 @@ class Downloader:
             )
             raise
 
+    async def convertAll(
+        self
+        , ffmpeg_arguments: str
+        , extension: str = ''
+    ) -> AsyncGenerator['VoiceLine', None]:
+        """ Converts (using FFMpeg with given arguments) voice_line and yields it """
+        async for servant in self.servants():
+            for voice_line in servant.loadedVoices():
+                voice_line.convert(arguments=ffmpeg_arguments, extension=extension)
+                yield voice_line
+
     async def buildDatasetLJSpeech(self, bar: Bar, replace_ok: bool = True) -> None:
-        logger.info("Requested dataset build")
+        """ Deprecated """
+        logger.info("Requested dataset build in LJSpeech format")
         await self.updateBasicServant()
         assert isinstance(self.basic_servant, BasicServant)
         bar.max = self.basic_servant.collectionNoMax
@@ -522,16 +528,80 @@ class Downloader:
             async for servant in self.servants(buildVoiceLines=True):
                 bar.next()
                 index = 0
-                for index, voice_line in enumerate(servant.loadedVoicesWAV(), start=1):
+                for index, voice_line in enumerate(servant.loadedVoices('wav'), start=1):
                     subtitle = voice_line.subtitle.replace('\n', '. ')
                     voice_line_path = wavs_path / f"LJ{voice_line.servant_id:0>3}-{index:0>4}.wav"
                     assert not voice_line_path.exists()
-                    shutil.copyfile(voice_line.path_wav, voice_line_path)
+                    shutil.copyfile(voice_line.path('wav'), voice_line_path)
                     f.write(
                         f"{voice_line_path.stem}|{subtitle}|{subtitle}\n"
                     )
                 counter_voice_line += index
         logger.info(f"Metadata build finished. Saved {counter_voice_line} voice lines among {self.basic_servant.collectionNoMax} servants")
+
+    async def buildDatasetVCTK(self, bar: Bar, replace_ok: bool = True, concurrent_workers: int = 4) -> None:
+        assert isinstance(bar, Bar)
+        assert isinstance(replace_ok, bool)
+        assert isinstance(concurrent_workers, int)
+        assert concurrent_workers > 0
+        logger.info("Requested dataset build in VCTK format")
+        await self.updateBasicServant()
+        assert isinstance(self.basic_servant, BasicServant)
+        bar.max = self.basic_servant.collectionNoMax
+        bar.message = 'Building Dataset'
+        bar.update()
+        speaker_info_path = DATASET_DIR / 'speaker-info.txt'
+        if speaker_info_path.exists():
+            if not replace_ok:
+                raise OSError("Can't overwrite speaker info when replace_ok=False")
+            speaker_info_path.unlink()
+        wavs_path = DATASET_DIR / 'wav48_silence_trimmed'
+        txts_path = DATASET_DIR / 'txt'
+        if wavs_path.exists():
+            if replace_ok:
+                shutil.rmtree(wavs_path)
+            else:
+                try:
+                    next(wavs_path.iterdir())
+                except StopIteration:
+                    raise OSError("Can't overwrite wavs folder when replace_ok=False")
+        if txts_path.exists():
+            if replace_ok:
+                shutil.rmtree(txts_path)
+            else:
+                try:
+                    next(txts_path.iterdir())
+                except StopIteration:
+                    raise OSError("Can't overwrite wavs folder when replace_ok=False")
+        wavs_path.mkdir(exist_ok=False)
+        txts_path.mkdir(exist_ok=False)
+
+        counter_all_voices = 0
+        async for servant in self.servants():
+            servant_name = servant.defaultName().replace(' ', '_')
+            path_servant = wavs_path / servant_name
+            path_servant.mkdir()
+            voice_line_counter = 0
+            for voice_line in servant.loadedVoices():
+                counter_all_voices += 1
+                voice_line_counter += 1
+                filename = f'{servant_name}_{voice_line_counter:0>3}_mic1'
+                voice_line.convert('-f flac', extension='flac')
+                try:
+                    voice_line.path('flac').rename(path_servant.joinpath(f"{filename}.flac"))
+                    txts_path.joinpath(f"{filename}.txt").write_text(
+                        data=voice_line.subtitle.replace('\n', '')
+                        , encoding='utf-8'
+                    )
+                except:
+                    voice_line.path('flac').unlink(missing_ok=True)
+                    raise
+                break
+            bar.message = f"Updating {servant.defaultName()}"[:40].ljust(40).replace('\n', '')
+            bar.update()
+            break
+
+        logger.info(f"Metadata build finished. Saved {counter_all_voices} voice lines among {self.basic_servant.collectionNoMax} servants")
 
     def destroy(self) -> None:
         """ Deletes current instance """
@@ -606,7 +676,7 @@ class VoiceLine:
         return self.dictionary['svt_id']
 
     @property
-    def servant_name(self) -> int:
+    def servant_name(self) -> str:
         assert 'svt_name' in self.dictionary
         return self.dictionary['svt_name']
 
@@ -646,22 +716,12 @@ class VoiceLine:
     def filename(self) -> str:
         """ Full file name in the destination folder. Example: "Skill 1.mp4" """
         index = '' if self.index == -1 else f" {self.index+1}"
-        return f"{self.anyName}{index}.mp3"
+        return f"{self.anyName}{index}"
 
-    @property
-    def filename_wav(self) -> str:
-        """ Full file name in the destination folder with wav extension. Example: "Skill 1.wav" """
-        return f"{self.filename.rsplit('.', maxsplit=1)[0]}.wav"
-
-    @property
-    def path(self) -> Path:
+    def path(self, extension: str) -> Path:
         """ Full path to voice line"""
-        return self.path_folder / self.filename
-
-    @property
-    def path_wav(self) -> Path:
-        """ Full path to voice line in wav format"""
-        return self.path_folder / self.filename_wav
+        assert isinstance(extension, str)
+        return self.path_folder.joinpath(f"{self.filename}.{extension}")
 
     @property
     def index(self) -> int:
@@ -669,20 +729,10 @@ class VoiceLine:
         assert isinstance(self.dictionary['_index'], int)
         return self.dictionary['_index']
 
-    @property
-    def loaded(self) -> bool:
+    def loaded(self, extension: str) -> bool:
         """ Returns True if voice line downloaded in any format """
-        return self.loaded_wav or self.loaded_mp3
-
-    @property
-    def loaded_wav(self) -> bool:
-        """ Returns True if voice line wav variant exists """
-        return self.path_wav.exists()
-
-    @property
-    def loaded_mp3(self) -> bool:
-        """ Returns True if voice line mp3 variant exists """
-        return self.path.exists()
+        assert isinstance(extension, str)
+        return self.path(extension=extension).exists()
 
     @property
     def subtitle(self) -> str:
@@ -697,9 +747,9 @@ class VoiceLine:
         yield from self.dictionary['audioAssets']
 
     async def metadata_update(self) -> None:
-        assert self.path.exists()
+        assert self.path('mp3').exists()
         downloader = Downloader()
-        _d3: eyed3.AudioFile | None = eyed3.load(str(self.path))
+        _d3: eyed3.AudioFile | None = eyed3.load(str(self.path('mp3')))
 
         if downloader.basic_servant is None:
             await downloader.updateBasicServant()
@@ -729,7 +779,7 @@ class VoiceLine:
         :raises FFMPEGException: Raised when all files OK but FFMpeg failed
         """
         assert len({str(i.parent) for i in source_paths}) == 1  # Same parent folder
-        assert not self.loaded_mp3
+        assert not self.loaded('mp3')
         assert source_paths
 
         filenames = [i.name for i in source_paths]
@@ -738,7 +788,7 @@ class VoiceLine:
             f"{FFMPEG_PATH} -i \"concat:"
             f"{'|'.join(filenames)}"
             '" -c copy '
-            f'"{self.filename}"'
+            f'"{self.filename}.mp3"'
         )
         p = subprocess.Popen(
             args=command
@@ -762,7 +812,7 @@ class VoiceLine:
                 for source in source_paths:
                     source.unlink()
                 raise DownloadException(
-                    f"File {self.path} couldn't be downloaded due to error received from AA:\n"
+                    f"File {self.path}.mp3 couldn't be downloaded due to error received from AA:\n"
                     + json.dumps(loaded, indent=4)
                 )
 
@@ -780,16 +830,36 @@ class VoiceLine:
         for source in source_paths:
             source.unlink()
 
-    def convert_to_wav(self, unlink_source: bool = True) -> None:
-        assert isinstance(unlink_source, bool)
-        assert self.loaded_mp3
-        assert not self.loaded_wav
-
-        command = (
-            f'{FFMPEG_PATH} -i "{self.filename}" '
-            "-acodec pcm_s16le -ar 22050 "
-            f'"{self.filename_wav}"'
+    def convert_to_flac(self, unlink_source: bool = True):
+        return self.convert(
+            arguments="-f flac"
+            , extension='flac'
+            , unlink_source=unlink_source
         )
+
+    def convert_to_s16le(self, unlink_source: bool = True):
+        return self.convert(
+            arguments="-acodec pcm_s16le -ar 22050"
+            , extension='wav'
+            , unlink_source=unlink_source
+        )
+
+    def convert(
+            self,
+            arguments: str,
+            extension: str,
+            unlink_source: bool = False
+        ) -> None:
+        assert isinstance(unlink_source, bool)
+        assert isinstance(arguments, str)
+        assert arguments
+        assert isinstance(extension, str)
+        assert extension
+        assert self.loaded('mp3')
+        assert not self.loaded(extension)
+
+        command = f'{FFMPEG_PATH} -i "{self.filename}.mp3" {arguments} "{self.filename}.{extension}"'
+        print(command)
         p = subprocess.Popen(
             args=command
             , cwd=self.path_folder
@@ -812,7 +882,7 @@ class VoiceLine:
             )
 
         if unlink_source:
-            self.path.unlink()
+            self.path('mp3').unlink()
 
     @staticmethod
     def _leftovers_delete(paths: list[Path]) -> None:
@@ -838,13 +908,13 @@ class VoiceLine:
         """ Downloads current voice line.
             Uses Downloader, self.path/_leftovers_delete/_voiceLinesURL/concat_mp3
         """
-        assert not self.path.exists()
+        assert not self.path('mp3').exists()
         downloader = Downloader()
         paths: list[Path] = []
         atexit.register(self._leftovers_delete, paths)
         for index, voice_url in enumerate(self._voiceLinesURL()):
             self.path_folder.mkdir(parents=True, exist_ok=True)
-            paths.append(self.path)
+            paths.append(self.path(''))
             paths[-1] = paths[-1].with_stem(f"{paths[-1].stem}_{index}")
             if paths[-1].exists():
                 getLogger('AA_voices_downloader').warning(
@@ -918,6 +988,12 @@ class ServantVoices:
     def path_voices(self) -> Path:
         """ Path to servant voices folder (contains voice lines)"""
         return self.path / 'voices'
+
+    def defaultName(self) -> str:
+        assert isinstance(self._dictionary, dict)
+        assert 'name' in self._dictionary
+        assert isinstance(self._dictionary['name'], str)
+        return self._dictionary['name']
 
     def name(self, ascension: Ascension) -> str:
         assert isinstance(self._dictionary, dict)
@@ -1067,10 +1143,10 @@ class ServantVoices:
                     for voice_line in type_values:
                         yield voice_line
 
-    def loadedVoicesWAV(self) -> Generator[VoiceLine, None, None]:
-        """ Iterates over all downloaded as WAV files"""
+    def loadedVoices(self, extension: str = 'mp3') -> Generator[VoiceLine, None, None]:
+        """ Iterates over all downloaded files with specified extension"""
         for voice_line in self.allVoices():
-            if voice_line.loaded_wav:
+            if voice_line.loaded(extension):
                 yield voice_line
 
     def _iterate_over_conflicts(self) -> Generator[list[VoiceLine], None, None]:
@@ -1080,7 +1156,7 @@ class ServantVoices:
         paths: dict[str, list[VoiceLine]] = dict()
         duplicates: set[str] = set()
         for voice_line in self.allVoices():
-            path = str(voice_line.path)
+            path = str(voice_line.path('mp3'))
             if path not in paths:
                 paths[path] = [voice_line]
             else:
@@ -1096,16 +1172,13 @@ class ServantVoices:
             print(
                 f"{self.collectionNo: >3}: "
                 f"""{', '.join((f"{i.name} ({i.type})".ljust(50) for i in duplicates))}"""
-                f" points to one path {duplicates[0].path}"
+                f" points to one path {duplicates[0].path('mp3')}"
             )
-
 
     async def updateVoices(
             self
             , bar: Bar | None = None
             , message_size: int = 40
-            , save_mp3: bool = True
-            , save_wav: bool = True
         ) -> None:
         """ Main possible function for VoiceLine. Downloading current voice line
             with tracking progress with created Bar.
@@ -1128,6 +1201,9 @@ class ServantVoices:
         elif downloader.timestamps['NA'] > self.path.lstat().st_mtime:
             logger.info(f'S{self.collectionNo}: folder modified before NA patch')
             current_json = json.loads(self.path_json.read_text(encoding='utf-8'))
+            if bar is not None:
+                bar.message = 'Downloading JSON'
+                bar.update()
             new_json = await self._get_json(self.collectionNo)
             comparer = DeepComparer(current_json, new_json)
             try:
@@ -1150,13 +1226,13 @@ class ServantVoices:
         converted_counter = 0
         for ascension_values in self.voice_lines.values():
             for category_values in ascension_values.values():
+                if bar is not None:
+                    bar.update()
                 for type_values in category_values.values():
                     for voice_line in type_values:
                         if bar is not None:
                             bar.index += 1
-                        load_mp3 = save_mp3 and not voice_line.loaded_mp3
-                        load_wav = save_wav and not voice_line.loaded_wav
-                        if not load_mp3 and not load_wav:
+                        if voice_line.loaded('mp3'):
                             continue
                         if bar is not None:
                             bar.suffix = '%(index)d/%(max)d'
@@ -1168,33 +1244,25 @@ class ServantVoices:
                                 voice_line.name.__format__(f" <{message_size-11}")
                             )[:message_size]
                             bar.update()
-                        if not voice_line.loaded_mp3:
-                            downloaded_counter += 1
-                            try:
-                                await voice_line.download()
-                            except DownloadException:
-                                if ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION\
-                                    not in\
-                                    SERVANT_EXCEPTIONS.get(self.collectionNo, set()):
-                                    raise
-                                self.skipped_amount += 1
-                                downloaded_counter  -= 1
-                                logger.warning(
-                                    f"S{self.collectionNo}: Skipping VoiceLine {voice_line.path} due to"
-                                    f" {ExceptionType.__name__}."
-                                    f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
-                                    " == true"
-                                )
-                                continue
-                        if load_wav:
-                            voice_line.convert_to_wav(unlink_source=not save_mp3)
-                        # Not ok only when save    is requested, but no file existing
-                        assert not save_mp3 or voice_line.loaded_mp3
-                        # Not ok only when convert is requested, but no file existing
-                        assert not save_wav or voice_line.loaded_wav
+                        downloaded_counter += 1
+                        try:
+                            await voice_line.download()
+                        except DownloadException:
+                            if ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION\
+                                not in\
+                                SERVANT_EXCEPTIONS.get(self.collectionNo, set()):
+                                raise
+                            self.skipped_amount += 1
+                            downloaded_counter  -= 1
+                            logger.warning(
+                                f"S{self.collectionNo}: Skipping VoiceLine {voice_line.path('mp3')} due to"
+                                f" {ExceptionType.__name__}."
+                                f"{ExceptionType.SKIP_ON_DOWNLOAD_EXCEPTION.name}"
+                                " == true"
+                            )
+                            continue
                         if bar is not None:
                             bar.update()
-
                         asyncio.create_task(update_modified_date(self.path))
         if bar is not None:
             bar.message = f'Servant {self.collectionNo: >3} up-to-date'

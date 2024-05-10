@@ -5,12 +5,26 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Current File",
+            "name": "Train",
             "type": "debugpy",
             "request": "launch",
             "cwd": "${workspaceFolder}/scripts",
             "program": "main.py",
-            "console": "integratedTerminal"
-        }
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            }
+        },
+        // {
+        //     "name": "Use",
+        //     "type": "debugpy",
+        //     "request": "launch",
+        //     "cwd": "${workspaceFolder}/scripts",
+        //     "program": "ai/use.py",
+        //     "console": "integratedTerminal",
+        //     "env": {
+        //         "CUDA_VISIBLE_DEVICES": "0"
+        //     }
+        // }
     ]
 }

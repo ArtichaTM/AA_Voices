@@ -9,6 +9,8 @@
         "groeth",
         "levelname",
         "MAINDIR",
-        "rapidoc"
+        "rapidoc",
+        "txts",
+        "VCTK"
     ]
 }

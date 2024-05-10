@@ -28,15 +28,13 @@ async def amain():
     downloader =  Downloader(delay=1, maximum_retries=7)
     logger.info('Downloader initialized')
 
-    await downloader.recheckAllVoices(
-        bar=Bar
-        , spinner=Spinner
-        , save_wav=True
-        , save_mp3=True
-    )
+    # await downloader.recheckAllVoices(
+    #     bar=Bar
+    #     , spinner=Spinner
+    # )
+    await downloader.buildDatasetVCTK(Bar(), replace_ok=False, concurrent_workers=4)
     # await downloader.recheckAllVoices()
     # await downloader._print_all_conflicts()
-    await downloader.buildDataset(bar=Bar())
 
     # from classes import ServantVoices
     # servant = await ServantVoices.load()
@@ -45,8 +43,8 @@ async def amain():
     # await servant.updateVoices()
     # servant._print_conflicts()
 
-    from ai.training import main as train_main
-    train_main()
+    # from ai.training import main as train_main
+    # train_main()
 
 
 def main() -> None:
