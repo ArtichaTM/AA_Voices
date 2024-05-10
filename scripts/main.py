@@ -43,14 +43,13 @@ async def amain():
     # await servant.updateVoices()
     # servant._print_conflicts()
 
-    # from ai.training import main as train_main
-    # train_main()
-
 
 def main() -> None:
     logger = logging.getLogger('AA_voices_downloader')
     try:
-        run(amain())
+        # run(amain())
+        from ai.training import trainer
+        trainer.fit()
     except KeyboardInterrupt:
         logger.info("Exiting via KeyboardInterrupt")
     except:

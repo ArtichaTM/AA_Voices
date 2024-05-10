@@ -1,33 +1,34 @@
-import os
+from pathlib import Path
 
-import torch
-# torch.cuda.set_device(0)
-# gpu = torch.device('cuda:0')
 from trainer import Trainer, TrainerArgs
 
 from TTS.config.shared_configs import BaseDatasetConfig
 from TTS.tts.configs.delightful_tts_config import DelightfulTtsAudioConfig, DelightfulTTSConfig
 from TTS.tts.datasets import load_tts_samples
 from TTS.tts.models.delightful_tts import DelightfulTTS, DelightfulTtsArgs, VocoderConfig
+from TTS.tts.utils.speakers import SpeakerManager
 from TTS.tts.utils.text.tokenizer import TTSTokenizer
 from TTS.utils.audio.processor import AudioProcessor
 
-from settings import DATASET_DIR, MAINDIR
-
-output_path = MAINDIR.joinpath('training').absolute()
+ROOT_PATH = Path(__file__) / '..' / '..' / '..'
+OUTPUT_PATH = ROOT_PATH / 'training'
+DATA_PATH = ROOT_PATH / 'dataset' / 'vctk'
+F0_CACHE_PATH = OUTPUT_PATH / 'f0_cache'
+PHONEME_CACHE_PATH = OUTPUT_PATH / 'phoneme_cache'
 
 dataset_config = BaseDatasetConfig(
-    dataset_name="ljspeech", formatter="ljspeech", meta_file_train="metadata.csv", path=str(DATASET_DIR.absolute())
+    dataset_name="vctk", formatter="vctk", meta_file_train="", path=str(DATA_PATH.resolve()), language="en-us"
 )
 
 audio_config = DelightfulTtsAudioConfig()
+
 model_args = DelightfulTtsArgs()
 
 vocoder_config = VocoderConfig()
 
-delightful_tts_config = DelightfulTTSConfig(
-    run_name="AA",
-    run_description="Training AA voices.",
+something_tts_config = DelightfulTTSConfig(
+    run_name="delightful_tts_vctk",
+    run_description="Train like in delightful tts paper.",
     model_args=model_args,
     audio=audio_config,
     vocoder=vocoder_config,
@@ -35,34 +36,30 @@ delightful_tts_config = DelightfulTTSConfig(
     eval_batch_size=16,
     num_loader_workers=10,
     num_eval_loader_workers=10,
-    precompute_num_workers=10,
-    batch_group_size=2,
+    precompute_num_workers=3,
     compute_input_seq_cache=True,
     compute_f0=True,
-    f0_cache_path=os.path.join(output_path, "f0_cache"),
+    f0_cache_path=str(F0_CACHE_PATH.resolve()),
     run_eval=True,
     test_delay_epochs=-1,
     epochs=1000,
     text_cleaner="english_cleaners",
     use_phonemes=True,
     phoneme_language="en-us",
-    phoneme_cache_path=os.path.join(output_path, "phoneme_cache"),
+    phoneme_cache_path=str(PHONEME_CACHE_PATH.resolve()),
     print_step=50,
     print_eval=False,
     mixed_precision=True,
-    output_path=output_path,
+    output_path=str(OUTPUT_PATH.resolve()),
     datasets=[dataset_config],
-    start_by_longest=False,
-    eval_split_size=0.1,
+    start_by_longest=True,
     binary_align_loss_alpha=0.0,
     use_attn_priors=False,
-    lr_gen=4e-1,
-    lr=4e-1,
-    lr_disc=4e-1,
-    max_text_len=130,
+    max_text_len=80,
+    steps_to_start_discriminator=10000,
 )
 
-tokenizer, config = TTSTokenizer.init_from_config(delightful_tts_config)
+tokenizer, config = TTSTokenizer.init_from_config(something_tts_config)
 
 ap = AudioProcessor.init_from_config(config)
 
@@ -74,13 +71,14 @@ train_samples, eval_samples = load_tts_samples(
     eval_split_size=config.eval_split_size,
 )
 
-model = DelightfulTTS(ap=ap, config=config, tokenizer=tokenizer, speaker_manager=None)
+
+speaker_manager = SpeakerManager()
+speaker_manager.set_ids_from_data(train_samples + eval_samples, parse_key="speaker_name")
+config.model_args.num_speakers = speaker_manager.num_speakers
+
+
+model = DelightfulTTS(ap=ap, config=config, tokenizer=tokenizer, speaker_manager=speaker_manager)
 
 trainer = Trainer(
-    TrainerArgs(gpu=0),
-    config,
-    output_path,
-    model=model.cuda(),
-    train_samples=train_samples,
-    eval_samples=eval_samples,
+    TrainerArgs(gpu=0), config, str(OUTPUT_PATH.resolve()), model=model, train_samples=train_samples, eval_samples=eval_samples
 )

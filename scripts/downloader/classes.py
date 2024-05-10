@@ -550,13 +550,15 @@ class Downloader:
         bar.max = self.basic_servant.collectionNoMax
         bar.message = 'Building Dataset'
         bar.update()
-        speaker_info_path = DATASET_DIR / 'speaker-info.txt'
+        vctk_folder = DATASET_DIR / 'vctk'
+        vctk_folder.mkdir(exist_ok=True)
+        speaker_info_path = vctk_folder / 'speaker-info.txt'
         if speaker_info_path.exists():
             if not replace_ok:
                 raise OSError("Can't overwrite speaker info when replace_ok=False")
             speaker_info_path.unlink()
-        wavs_path = DATASET_DIR / 'wav48_silence_trimmed'
-        txts_path = DATASET_DIR / 'txt'
+        wavs_path = vctk_folder / 'wav48_silence_trimmed'
+        txts_path = vctk_folder / 'txt'
         if wavs_path.exists():
             if replace_ok:
                 shutil.rmtree(wavs_path)
@@ -564,6 +566,8 @@ class Downloader:
                 try:
                     next(wavs_path.iterdir())
                 except StopIteration:
+                    wavs_path.unlink()
+                else:
                     raise OSError("Can't overwrite wavs folder when replace_ok=False")
         if txts_path.exists():
             if replace_ok:
@@ -572,35 +576,50 @@ class Downloader:
                 try:
                     next(txts_path.iterdir())
                 except StopIteration:
+                    txts_path.unlink()
+                else:
                     raise OSError("Can't overwrite wavs folder when replace_ok=False")
         wavs_path.mkdir(exist_ok=False)
         txts_path.mkdir(exist_ok=False)
 
         counter_all_voices = 0
         async for servant in self.servants():
-            servant_name = servant.defaultName().replace(' ', '_')
-            path_servant = wavs_path / servant_name
-            path_servant.mkdir()
+            bar.message = f"Converting {servant.defaultName()}"[:40].ljust(40).replace('\n', '')
+            bar.update()
+            path_servant_flacs = wavs_path / str(servant.collectionNo)
+            path_servant_flacs.mkdir()
+            path_servant_txts = txts_path / str(servant.collectionNo)
+            path_servant_txts.mkdir()
             voice_line_counter = 0
             for voice_line in servant.loadedVoices():
+                subtitle_length = len(voice_line.subtitle)
+                if subtitle_length < 2 or subtitle_length > 80:
+                    logger.debug(
+                        f"Voice line "
+                        f"{voice_line.servant_name}/{voice_line.ascension}/{voice_line.anyName}"
+                        f" having subtitles length {len(voice_line.subtitle)}, skipping it"
+                    )
+                    continue
                 counter_all_voices += 1
                 voice_line_counter += 1
-                filename = f'{servant_name}_{voice_line_counter:0>3}_mic1'
-                voice_line.convert('-f flac', extension='flac')
+                filename = f'{servant.collectionNo}_{voice_line_counter:0>3}'
+                old_flac_path = voice_line.convert('-f flac', extension='flac')
+                target_txt_path = path_servant_txts / f"{filename}.txt"
+                target_flac_path = path_servant_flacs / f"{filename}_mic1.flac"
                 try:
-                    voice_line.path('flac').rename(path_servant.joinpath(f"{filename}.flac"))
-                    txts_path.joinpath(f"{filename}.txt").write_text(
-                        data=voice_line.subtitle.replace('\n', '')
+                    old_flac_path.rename(target_flac_path)
+                    target_txt_path.write_text(
+                        data=voice_line.subtitle.replace('\n', ' ')
                         , encoding='utf-8'
                     )
                 except:
                     voice_line.path('flac').unlink(missing_ok=True)
                     raise
-                break
-            bar.message = f"Updating {servant.defaultName()}"[:40].ljust(40).replace('\n', '')
-            bar.update()
-            break
-
+                assert target_flac_path.exists()
+                assert target_txt_path.exists()
+                assert target_txt_path.stat().st_size > 1,\
+                    f"{target_txt_path.stat().st_size} for {target_txt_path} lower than 1"
+            bar.index += 1
         logger.info(f"Metadata build finished. Saved {counter_all_voices} voice lines among {self.basic_servant.collectionNoMax} servants")
 
     def destroy(self) -> None:
@@ -849,17 +868,16 @@ class VoiceLine:
             arguments: str,
             extension: str,
             unlink_source: bool = False
-        ) -> None:
+        ) -> Path:
         assert isinstance(unlink_source, bool)
         assert isinstance(arguments, str)
         assert arguments
         assert isinstance(extension, str)
         assert extension
         assert self.loaded('mp3')
-        assert not self.loaded(extension)
+        assert not self.loaded(extension), f"File {self.path(extension)} already exists"
 
         command = f'{FFMPEG_PATH} -i "{self.filename}.mp3" {arguments} "{self.filename}.{extension}"'
-        print(command)
         p = subprocess.Popen(
             args=command
             , cwd=self.path_folder
@@ -883,6 +901,8 @@ class VoiceLine:
 
         if unlink_source:
             self.path('mp3').unlink()
+
+        return Path(self.path_folder / f"{self.filename}.{extension}")
 
     @staticmethod
     def _leftovers_delete(paths: list[Path]) -> None:
