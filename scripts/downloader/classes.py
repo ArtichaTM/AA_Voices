@@ -232,7 +232,7 @@ class DeepComparer:
         right: dict
     ) -> None:
         if len(left) != len(right):
-            raise cls.DifferentLength(len(left), len(right))
+            raise cls.DifferentLength([], len(left), len(right))
         for (lk, lv), (rk, rv) in zip(left.items(), right.items()):
             assert not isinstance(lk, (dict, list)), "How?"
             assert not isinstance(rk, (dict, list)), "How?"
