@@ -28,13 +28,13 @@ async def amain():
     downloader =  Downloader(delay=1, maximum_retries=7)
     logger.info('Downloader initialized')
 
-    # await downloader.recheckAllVoices(
-    #     bar=Bar
-    #     , spinner=Spinner
-    # )
-    await downloader.buildDatasetVCTK(Bar(), replace_ok=False)
+    await downloader.recheckAllVoices(
+        bar=Bar
+        , spinner=Spinner
+    )
+    # await downloader.buildDatasetVCTK(Bar(), replace_ok=False)
     # await downloader.recheckAllVoices()
-    # await downloader._print_all_conflicts()
+    await downloader._print_all_conflicts()
 
     # from classes import ServantVoices
     # servant = await ServantVoices.load()
@@ -47,9 +47,9 @@ async def amain():
 def main() -> None:
     logger = logging.getLogger('AA_voices_downloader')
     try:
-        # run(amain())
-        from ai.training import trainer
-        trainer.fit()
+        run(amain())
+        # from ai.training import trainer
+        # trainer.fit()
     except KeyboardInterrupt:
         logger.info("Exiting via KeyboardInterrupt")
     except:
