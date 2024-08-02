@@ -194,7 +194,7 @@ class DeepComparer:
         def prettify(self) -> str:
             assert isinstance(self.args[0], list)
             assert len(self.args) == 3, self.args
-            return f"In {self._path()} different value: {self.args[1]} vs {self.args[2]}"
+            return f"In {self._path()} different value: {repr(self.args[1])} vs {repr(self.args[2])}"
 
 
     def __init__(self, left: dict | list, right: dict | list) -> None:
