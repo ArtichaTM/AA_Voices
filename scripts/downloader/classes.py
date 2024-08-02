@@ -166,17 +166,18 @@ class DeepComparer:
             assert isinstance(self.args[0], list)
             assert isinstance(self.args[1], int)
             assert isinstance(self.args[2], int)
-            return f"In {self._path()} {self.args[1]} != {self.args[2]}"
+            return f"In {self._path()} different lengths: {self.args[1]} vs {self.args[2]}"
 
     class DifferentTypes(ComparerException):
         """
         Objects in the same position have different types.
         """
         def prettify(self) -> str:
+            assert len(self.args) == 3
             assert isinstance(self.args[0], list)
             assert isinstance(self.args[1], type)
             assert isinstance(self.args[2], type)
-            return f"In {self._path()} {self.args[1]} != {self.args[2]}"
+            return f"In {self._path()} different types: {self.args[1]} vs {self.args[2]}"
 
     class DifferentDictKeys(ComparerException):
         """
@@ -184,7 +185,7 @@ class DeepComparer:
         """
         def prettify(self) -> str:
             assert isinstance(self.args[0], list)
-            return f"In {self._path()} {self.args[1]} != {self.args[2]}"
+            return f"In {self._path()} different dict keys: {self.args[1]} vs {self.args[2]}"
 
     class DifferentValues(ComparerException):
         """
@@ -192,7 +193,8 @@ class DeepComparer:
         """
         def prettify(self) -> str:
             assert isinstance(self.args[0], list)
-            return f"In {self._path()} {self.args[1]} != {self.args[2]}"
+            assert len(self.args) == 3, self.args
+            return f"In {self._path()} different value: {self.args[1]} vs {self.args[2]}"
 
 
     def __init__(self, left: dict | list, right: dict | list) -> None:
@@ -203,27 +205,54 @@ class DeepComparer:
         self.right = right
 
     @classmethod
-    def _deepCompareList(cls, left: list, right: list) -> None:
-        if len(left) != len(right):
-            raise cls.DifferentLength([], len(left), len(right))
-        for index, (lv, rv) in enumerate(zip(left, right)):
+    def _compare_values(cls, lv: Any, rv: Any, key: str | None = None) -> None:
             if isinstance(lv, list):
                 if not isinstance(rv, list):
-                    raise cls.DifferentTypes([index])
+                    raise cls.DifferentTypes([key], type(lv), type(rv))
                 method = cls._deepCompareList
             elif isinstance(lv, dict):
                 if not isinstance(rv, dict):
-                    raise cls.DifferentTypes([index])
+                    raise cls.DifferentTypes([key], type(lv), type(rv))
                 method = cls._deepCompareDict
-            else:
+            elif isinstance(lv, tuple):
+                if not isinstance(rv, tuple):
+                    raise cls.DifferentTypes([key], type(lv), type(rv))
+                lv, rv = list(lv), list(rv)
+                method = cls._deepCompareList
+            elif isinstance(lv, int):
+                if not isinstance(rv, int):
+                    raise cls.DifferentTypes([key], type(lv), type(rv))
                 if lv != rv:
-                    raise cls.DifferentValues([index])
+                    raise cls.DifferentValues([key], lv, rv)
+                return
+            elif isinstance(lv, float):
+                if not isinstance(rv, float):
+                    raise cls.DifferentTypes([key], type(lv), type(rv))
+                if lv != rv:
+                    raise cls.DifferentValues([key], lv, rv)
+                return
+            elif isinstance(lv, str):
+                if not isinstance(rv, str):
+                    raise cls.DifferentTypes([key], type(lv), type(rv))
+                if lv != rv:
+                    raise cls.DifferentValues([key], lv, rv)
+                return
+            else:
+                raise RuntimeError(f"Can't compare types {type(lv)}")
             try:
                 method(lv, rv) # type: ignore
             except cls.ComparerException as e:
                 assert isinstance(e.args[0], list)
-                e.args[0].append(index)
+                if key is not None:
+                    e.args[0].append(key)
                 raise
+
+    @classmethod
+    def _deepCompareList(cls, left: list, right: list) -> None:
+        if len(left) != len(right):
+            raise cls.DifferentLength([], len(left), len(right))
+        for index, (lv, rv) in enumerate(zip(left, right)):
+            cls._compare_values(lv, rv, str(index))
 
     @classmethod
     def _deepCompareDict(
@@ -231,6 +260,8 @@ class DeepComparer:
         left: dict,
         right: dict
     ) -> None:
+        assert isinstance(left, dict)
+        assert isinstance(right, dict)
         if len(left) != len(right):
             raise cls.DifferentLength([], len(left), len(right))
         for (lk, lv), (rk, rv) in zip(left.items(), right.items()):
@@ -238,22 +269,16 @@ class DeepComparer:
             assert not isinstance(rk, (dict, list)), "How?"
             if lk != rk:
                 raise cls.DifferentDictKeys([], lk, rk)
-            if lv != rv:
-                raise cls.DifferentValues([lk], lv, rv)
+            cls._compare_values(lv, rv, repr(lk))
 
     def compare(self) -> None:
-        if isinstance(self.left, dict):
-            assert isinstance(self.right, dict)
-            method = self._deepCompareDict
-        else:
-            assert isinstance(self.left, list)
-            assert isinstance(self.right, list)
-            method = self._deepCompareList
         try:
-            method(self.left, self.right) # type: ignore
+            self._compare_values(self.left, self.right, None)
         except self.ComparerException as e:
-            assert isinstance(e.args[0], list)
+            assert isinstance(e.args[0], list), type(e)
             e.args[0].reverse()
+            raise
+
 
 class Downloader:
     """ Class for downloading data from atlas academy """
@@ -1224,15 +1249,31 @@ class ServantVoices:
                 bar.message = 'Downloading JSON'
                 bar.update()
             new_json = await self._get_json(self.collectionNo)
-            comparer = DeepComparer(current_json, new_json)
-            try:
-                comparer.compare()
-            except comparer.ComparerException as e:
-                logger.info(f'S{self.collectionNo}: New JSON different from old. Where: {e.prettify()}')
-                shutil.rmtree(self.path_voices)
+            while_fast = True
+            while while_fast:
+                while_fast = False
+                if (
+                    'profile' not in current_json
+                    or\
+                    'profile' not in new_json\
+                    or\
+                    'voices' not in current_json['profile']\
+                    or
+                    'voices' not in new_json['profile']
+                ):
+                    continue
+                comparer = DeepComparer(current_json['profile']['voices'], new_json['profile']['voices'])
+                try:
+                    comparer.compare()
+                except comparer.ComparerException as e:
+                    logger.info(f'S{self.collectionNo}: New JSON different from old. Where: {e.prettify()}')
+                    continue
+                else:
+                    logger.info(f'S{self.collectionNo}: New JSON same as old')
+                    asyncio.create_task(update_modified_date(self.path))
+                break
             else:
-                logger.info(f'S{self.collectionNo}: New JSON same as old')
-                asyncio.create_task(update_modified_date(self.path))
+                shutil.rmtree(self.path_voices)
         logger.debug(f'Started updating {self.collectionNo} voices')
         self.path_voices.mkdir(parents=False, exist_ok=True)
         if bar is not None:
