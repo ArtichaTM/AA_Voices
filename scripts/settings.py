@@ -18,7 +18,7 @@ class ExceptionType(IntEnum):
     SKIP_ON_DOWNLOAD_EXCEPTION = 1
 
 ALBUM_NAME = 'Fate: Grand Order Servants'
-MAINDIR = Path() / '..'
+MAINDIR = Path(__file__).parent.joinpath('..').absolute()
 DATASET_DIR = MAINDIR / 'dataset'
 LOGS_PATH = MAINDIR / 'logs'
 SERVANTS_FOLDER = DATASET_DIR / 'Servants'
