@@ -37,11 +37,11 @@ RESTORE_PATH = None  # "/root/.local/share/tts/tts_models--multilingual--multi-d
 SKIP_TRAIN_EPOCH = False
 
 # Set here the batch size to be used in training and evaluation
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 
 # Training Sampling rate and the target sampling rate for resampling the downloaded dataset (Note: If you change this you might need to redownload the dataset !!)
 # Note: If you add new datasets, please make sure that the dataset sampling rate and this parameter are matching, otherwise resample your audios
-SAMPLE_RATE = 16000
+SAMPLE_RATE = 44100
 
 # Max audio length in seconds to be used in training (every audio bigger than it will be ignored)
 MAX_AUDIO_LEN_IN_SECONDS = 10
@@ -50,8 +50,8 @@ MAX_AUDIO_LEN_IN_SECONDS = 10
 VCTK_PATH = ROOT_PATH / 'dataset' / 'vctk'
 # Define the number of threads used during the audio resampling
 NUM_RESAMPLE_THREADS = 10
-# Check if VCTK dataset is not already downloaded, if not download it
-resample_files(VCTK_PATH, SAMPLE_RATE, file_ext="flac", n_jobs=NUM_RESAMPLE_THREADS)
+# Check if VCTK dataset is not already downloaded, if not download it TODO: uncomment when needed
+# resample_files(VCTK_PATH, SAMPLE_RATE, file_ext="flac", n_jobs=NUM_RESAMPLE_THREADS)
 
 # init configs
 vctk_config = BaseDatasetConfig(

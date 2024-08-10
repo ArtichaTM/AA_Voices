@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "src/aa"
+]
+
+[project]
+name="AA_Voices"
+version="0.1"
+authors = [
+  {name="Геворкян Артём", email="tima-1324@mail.ru"}
+]
+description = "Discord bot by Articha"
+dependencies = [
+  'aiohttp==3.9.3',
+  'aiopath',
+  'progress==1.6',
+  'eyed3==0.9.7'
+]
+
+classifiers = [
+  "Development Status :: 4 - Beta"
+  , "Operating System :: POSIX :: Linux"
+  , "Operating System :: Microsoft :: Windows"
+  , "Programming Language :: Python"
+  , "Programming Language :: Python :: 3"
+  , "Programming Language :: Python :: 3 :: Only"
+  , "Programming Language :: Python :: 3.11"
+  , "Natural Language :: Russian"
+]
+requires-python = "> 3.11"
+
+# [project.optional-dependencies]
+# tests = [
+#   'flake8' # py3.9 7.0.0
+# ]
+# site = [
+#   'fastapi',  # 0.111.0
+#   'uvicorn',  # 0.30.1
+# ]

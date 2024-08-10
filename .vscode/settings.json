@@ -1,5 +1,5 @@
 {
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "off",
     "python.analysis.autoImportCompletions": false,
     "files.watcherInclude": [
         "log.txt"
@@ -12,10 +12,12 @@
         "levelname",
         "MAINDIR",
         "rapidoc",
+        "svts",
         "txts",
         "VCTK"
     ],
     "files.exclude": {
         "**/__pycache__": true,
+        "data/dataset": true,
     }
 }

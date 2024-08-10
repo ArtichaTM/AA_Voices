@@ -4,27 +4,28 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        {
-            "name": "Train",
-            "type": "debugpy",
-            "request": "launch",
-            "cwd": "${workspaceFolder}/scripts",
-            "program": "main.py",
-            "console": "integratedTerminal",
-            "env": {
-                "CUDA_VISIBLE_DEVICES": "0"
-            }
-        },
         // {
-        //     "name": "Use",
+        //     "name": "Train",
         //     "type": "debugpy",
         //     "request": "launch",
         //     "cwd": "${workspaceFolder}/scripts",
-        //     "program": "ai/use.py",
+        //     "program": "main.py",
         //     "console": "integratedTerminal",
         //     "env": {
         //         "CUDA_VISIBLE_DEVICES": "0"
         //     }
-        // }
+        // },
+        {
+            "name": "Recheck",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "aa",
+            "args": ["recheck"],
+            "cwd": "${workspaceFolder}/data",
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            }
+        }
     ]
 }
