@@ -99,7 +99,7 @@ async def _count_voice_lines_servant(collectionNo: int) -> tuple[int, int] | Non
     return valid, invalid
 
 
-def _count_voice_lines_format(valid: int, invalid: int, svts: int) -> str:
+def _count_voice_lines_print(valid: int, invalid: int, svts: int) -> None:
     print(f"\r{valid: >5} | {invalid: >7} | {svts: >17}", end='', flush=True)
 
 
@@ -119,12 +119,12 @@ async def count_voice_lines() -> None:
     invalid = 0
     svt_counter = 0
     print(f"Valid | Invalid | Servants Processed")
-    _count_voice_lines_format(valid, invalid, svt_counter)
+    _count_voice_lines_print(valid, invalid, svt_counter)
     for completed in asyncio.as_completed(tasks):
         counters = await completed
         if counters is not None:
             valid += counters[0]
             invalid += counters[1]
         svt_counter += 1
-        _count_voice_lines_format(valid, invalid, svt_counter)
-    _count_voice_lines_format(valid, invalid, svt_counter)
+        _count_voice_lines_print(valid, invalid, svt_counter)
+    _count_voice_lines_print(valid, invalid, svt_counter)
