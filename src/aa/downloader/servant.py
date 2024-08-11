@@ -46,6 +46,7 @@ class Subtitle(NamedTuple):
     voice_line_id: str
     text: str
     url: str
+    path: AsyncPath
 
 
 class VoiceLine:
@@ -62,7 +63,7 @@ class VoiceLine:
         return self.json[item]
 
     def __repr__(self) -> str:
-        return f"<VoiceLine {self['svtVoiceType']}/{self['name']}>"
+        return f"<VoiceLine {self.parent.parent.svt.collectionNo}/{self.parent['type']}/{self.anyName}>"
 
     def __eq__(self, value: object) -> bool:
         assert isinstance(value, VoiceLine)
@@ -101,16 +102,20 @@ class VoiceLine:
         assert 'subtitle' in self.json
         subtitle = self['subtitle']
         assert isinstance(subtitle, str)
-        assert subtitle
+        if subtitle is None:
+            yield from ()
         counter = 0
-        for part in re.finditer(r'\[id (\d+)_(\d_[^\]]*)\]([^\[]*)', subtitle):
-            svt_id, voice_line_id, text = part
+        paths = self.voice_lines_paths()
+        for part in re.finditer(r'\[id (\d+)_(\d_[^\]]*)\]([^\[]*)[^\[]', subtitle):
+            svt_id, voice_line_id, text = part.groups()
             svt_id = int(svt_id)
+            assert len(self['audioAssets']) > counter, self
             yield Subtitle(
                 svt_id,
                 voice_line_id,
                 text.strip(),
-                self['audioAssets'][counter]
+                self['audioAssets'][counter],
+                next(paths)
             )
             counter += 1
 
@@ -382,6 +387,11 @@ class ServantVoices:
             for voice_line in voice.voice_lines.values():
                 yield voice_line
 
+    def iter_subtitles(self) -> Generator[tuple[AsyncPath, str], None, None]:
+        for voice_line in self.iter_voice_lines():
+            for subtitle in voice_line.subtitle_split():
+                yield subtitle.path, subtitle.text
+
     async def update_from(self, other: 'ServantVoices', progress: ProgressWatcher) -> None:
         self_keys = set(self.voices.keys())
         other_keys = set(self.voices.keys())
@@ -468,8 +478,9 @@ class Servant:
         return cls.fromCollectionNo(basic.collectionNo)
 
     async def load_from_json(self) -> 'Servant':
-        """ Loads json from file system. Exception, if json does not exist """
-        assert await self.json_path.exists()
+        """ Loads json from file system. FileNotFoundError exception, if json does not exist """
+        if not await self.json_path.exists():
+            raise FileNotFoundError()
         bytes = await self.json_path.read_bytes()
         self.json = loads(bytes)
         self.json_loaded = True

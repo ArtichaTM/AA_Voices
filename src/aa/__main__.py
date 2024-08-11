@@ -1,14 +1,29 @@
+from typing import Callable, Coroutine
 from sys import argv
-from asyncio import run, CancelledError
-from typing import Coroutine
+from asyncio import run
 
 from aa.settings import Colors
 from aa.settings import Settings
-from .downloader.functions import recheck_voice_lines, print_voice_lines
+from .downloader.functions import recheck_voice_lines, print_voice_lines, count_voice_lines
 
 
 def recheck(args: list[str]) -> Coroutine:
     return recheck_voice_lines()
+
+
+def voices(args: list[str]) -> Coroutine:
+    return print_voice_lines()
+
+
+def count(args: list[str]) -> Coroutine:
+    return count_voice_lines()
+
+
+FUNCTIONS: dict[str, Callable[[list[str],], Coroutine]] = {
+    'recheck': recheck,
+    'voices': voices,
+    'count': count
+}
 
 
 async def amain():
@@ -18,23 +33,18 @@ async def amain():
         if len(args) == 0:
             print(f"{Colors.FAIL}Exception:{Colors.END} First argument is mandatory")
             return
-        match args[0]:
-            case 'recheck':
-                coroutine = recheck(args[1:])
-            case 'voices':
-                coroutine = voices(args[1:])
-            case _:
-                print(f"{Colors.FAIL}Unknown Command:{Colors.END} {args[0]}")
-                return
+        func = FUNCTIONS.get(args[0])
+        if func is None:
+            print(f"{Colors.FAIL}Unknown Command:{Colors.END} {args[0]}")
+            return
         try:
-            await coroutine
-        except (KeyboardInterrupt, CancelledError):
+            await func(args[1:])
+        except KeyboardInterrupt:
             pass
 
 
-def voices(args: list[str]) -> Coroutine:
-    return print_voice_lines()
-
-
 if __name__ == '__main__':
-    run(amain())
+    try:
+        run(amain())
+    except KeyboardInterrupt:
+        pass

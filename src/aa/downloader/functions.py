@@ -1,6 +1,7 @@
 import asyncio
 import os
 from time import time
+from pathlib import Path
 
 from aiopath import AsyncPath
 
@@ -63,5 +64,67 @@ async def recheck_voice_lines():
             await svt_local.update_from(svt_aa, progress=progress)
         await progress.finish()
 
+
 async def print_voice_lines() -> None:
-    pass
+    assert Settings.i is not None
+    svts_path = Settings.i.servants_path
+    svt_max = max([int(i.name) async for i in svts_path.iterdir()])
+    for collectionNo in range(1, svt_max):
+        try:
+            servant = await Servant.fromCollectionNo(collectionNo).load_from_json()
+        except FileNotFoundError():
+            continue
+        servant.full_parse()
+        for path, string in servant.voices.iter_subtitles():
+            path = Path(path).resolve()
+            print(path, string.replace('\n', ' '))
+
+
+async def _count_voice_lines_servant(collectionNo: int) -> tuple[int, int] | None:
+    """Returns amount of valid and invalid voices lines for servant"""
+    assert isinstance(collectionNo, int)
+    valid = 0
+    invalid = 0
+    try:
+        servant = await Servant.fromCollectionNo(collectionNo).load_from_json()
+    except FileNotFoundError():
+        return None
+    servant.full_parse()
+    for voice_line in servant.voices.iter_voice_lines():
+        for path in voice_line.voice_lines_paths():
+            if await path.exists():
+                valid += 1
+            else:
+                invalid += 1
+    return valid, invalid
+
+
+def _count_voice_lines_format(valid: int, invalid: int, svts: int) -> str:
+    print(f"\r{valid: >5} | {invalid: >7} | {svts: >17}", end='', flush=True)
+
+
+async def count_voice_lines() -> None:
+    assert Settings.i is not None
+    svts_path = Settings.i.servants_path
+
+    tasks = []
+    async for svt_path in svts_path.iterdir():
+        try:
+            collectionNo = int(svt_path.name)
+        except ValueError:
+            continue
+        tasks.append(asyncio.create_task(_count_voice_lines_servant(collectionNo)))
+
+    valid = 0
+    invalid = 0
+    svt_counter = 0
+    print(f"Valid | Invalid | Servants Processed")
+    _count_voice_lines_format(valid, invalid, svt_counter)
+    for completed in asyncio.as_completed(tasks):
+        counters = await completed
+        if counters is not None:
+            valid += counters[0]
+            invalid += counters[1]
+        svt_counter += 1
+        _count_voice_lines_format(valid, invalid, svt_counter)
+    _count_voice_lines_format(valid, invalid, svt_counter)

@@ -20,7 +20,7 @@
             "type": "debugpy",
             "request": "launch",
             "module": "aa",
-            "args": ["recheck"],
+            "args": ["voices"],
             "cwd": "${workspaceFolder}/data",
             "console": "integratedTerminal",
             "env": {
