@@ -87,7 +87,7 @@ async def _count_voice_lines_servant(collectionNo: int) -> tuple[int, int] | Non
     invalid = 0
     try:
         servant = await Servant.fromCollectionNo(collectionNo).load_from_json()
-    except FileNotFoundError():
+    except FileNotFoundError:
         return None
     servant.full_parse()
     for voice_line in servant.voices.iter_voice_lines():
@@ -99,8 +99,8 @@ async def _count_voice_lines_servant(collectionNo: int) -> tuple[int, int] | Non
     return valid, invalid
 
 
-def _count_voice_lines_print(valid: int, invalid: int, svts: int) -> None:
-    print(f"\r{valid: >5} | {invalid: >7} | {svts: >17}", end='', flush=True)
+def _count_voice_lines_print(valid: int | str, invalid: int | str, svts: int | str) -> None:
+    print(f"\r| {valid: >5} | {invalid: >7} | {svts: >18} |", end='', flush=True)
 
 
 async def count_voice_lines() -> None:
@@ -118,13 +118,18 @@ async def count_voice_lines() -> None:
     valid = 0
     invalid = 0
     svt_counter = 0
-    print(f"Valid | Invalid | Servants Processed")
-    _count_voice_lines_print(valid, invalid, svt_counter)
-    for completed in asyncio.as_completed(tasks):
-        counters = await completed
-        if counters is not None:
-            valid += counters[0]
-            invalid += counters[1]
-        svt_counter += 1
+    print("+-------+---------+--------------------+")
+    try:
+        _count_voice_lines_print('Valid', 'Invalid', 'Servants processed')
+        print()
         _count_voice_lines_print(valid, invalid, svt_counter)
-    _count_voice_lines_print(valid, invalid, svt_counter)
+        for completed in asyncio.as_completed(tasks):
+            counters = await completed
+            if counters is not None:
+                valid += counters[0]
+                invalid += counters[1]
+            svt_counter += 1
+            _count_voice_lines_print(valid, invalid, svt_counter)
+        _count_voice_lines_print(valid, invalid, svt_counter)
+    finally:
+        print("\n+-------+---------+--------------------+")
