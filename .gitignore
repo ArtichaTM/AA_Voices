@@ -1,4 +1,6 @@
 data/*
+!data/[Dd]ocuments
+data/documents/diploma.docx
 training/*
 __pycache__
 logs/*

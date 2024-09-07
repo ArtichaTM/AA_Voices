@@ -1,6 +1,7 @@
 from typing import Callable, Coroutine
 from sys import argv
-from asyncio import run
+import asyncio
+import subprocess
 
 from aa.settings import Colors
 from aa.settings import Settings
@@ -19,10 +20,27 @@ def count(args: list[str]) -> Coroutine:
     return count_voice_lines()
 
 
+async def convert_diploma_docx(args: list[str]) -> Coroutine:
+    target = '-o documents/diploma.docx'
+    sources = ['documents/diploma.md']
+
+    if len(args) > 0:
+        target = f"-o {args[0]}"
+    if len(args) > 1:
+        sources = args[1:]
+
+    subprocess.run([
+        'python3.11', '-m', 'md2gost',
+        *target.split(),
+        *sources
+    ], shell=True)
+
+
 FUNCTIONS: dict[str, Callable[[list[str],], Coroutine]] = {
     'recheck': recheck,
     'voices': voices,
-    'count': count
+    'count': count,
+    'convert_diploma': convert_diploma_docx
 }
 
 
@@ -45,6 +63,6 @@ async def amain():
 
 if __name__ == '__main__':
     try:
-        run(amain())
+        asyncio.run(amain())
     except KeyboardInterrupt:
         pass
