@@ -133,3 +133,41 @@ async def count_voice_lines() -> None:
         _count_voice_lines_print(valid, invalid, svt_counter)
     finally:
         print("\n+-------+---------+--------------------+")
+
+
+async def clean_unused_data() -> None:
+    assert Settings.i is not None
+    svts_path = Settings.i.servants_path
+    print("Deleting unused files")
+
+    # Files deleting
+    async for svt_path in svts_path.iterdir():
+        try:
+            collectionNo = int(svt_path.name)
+            servant = await Servant.fromCollectionNo(collectionNo).load_from_json()
+        except (FileNotFoundError, ValueError):
+            continue
+
+        servant.full_parse()
+        for voice_line in servant.voices.iter_voice_lines():
+            if not await voice_line.folder.exists():
+                continue
+            files_exist = {i.name async for i in voice_line.folder.iterdir()}
+            files_should_exist = {i.name for i in voice_line.voice_lines_paths()}
+            to_delete = files_exist - files_should_exist
+            for file_name in to_delete:
+                file = voice_line.folder / file_name
+                print(f"Deleting file {file}")
+                await file.unlink()
+            break
+        break
+
+    # Folder deleting
+    for folder, folders, files in os.walk(Path(svts_path)):
+        empty = (not folders) and (not files)
+        if empty:
+            p = Path(folder)
+            print(f"Deleting dir  {p}")
+            p.rmdir()
+
+    print("Completed")
