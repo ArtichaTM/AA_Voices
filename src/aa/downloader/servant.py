@@ -261,7 +261,7 @@ class VoiceType:
 
     async def update_from(self, other: 'VoiceType', progress: ProgressWatcher) -> None:
         self_keys = set(self.voice_lines.keys())
-        other_keys = set(self.voice_lines.keys())
+        other_keys = set(other.voice_lines.keys())
         intersection_keys = self_keys & other_keys
         await self.path.mkdir(parents=True, exist_ok=True)
         async with asyncio.TaskGroup() as tg:
