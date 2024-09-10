@@ -23,6 +23,7 @@ async def update_modified_date(path: AsyncPath):
 
 
 async def get_timestamp() -> int:
+    assert Settings.i is not None
     async with Settings.i.get('/info') as resp:
         info = await resp.json()
         assert isinstance(info, dict)
