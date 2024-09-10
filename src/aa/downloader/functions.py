@@ -72,7 +72,7 @@ async def print_voice_lines() -> None:
     for collectionNo in range(1, svt_max):
         try:
             servant = await Servant.fromCollectionNo(collectionNo).load_from_json()
-        except FileNotFoundError():
+        except FileNotFoundError:
             continue
         servant.full_parse()
         for path, string in servant.voices.iter_subtitles():
