@@ -24,12 +24,13 @@ VOICE_LINE_TYPE_TRANSLATIONS: dict[str, str] = {
     'eventShop': 'EventShopTalk',
     'eventShopPurchase': 'EventShopPurchase',
     'eventJoin': 'JoinEvent',
+    'eventFortification': 'EventFortification',
+    'eventDigging': 'EventDigging',
+    'eventDailyPoint': 'EventDailyPoint',
     'guide': 'Guide',
     'eventTowerReward': 'EventReward',
     'warBoard': 'WarBoard',
-    'eventDailyPoint': 'EventDailyPoint',
     'treasureBox': 'Treasure',
-    'eventDigging': 'EventDigging'
 }
 RESTRICTED_IN_PATH = set(r'"\/{},.!?<>:;' + "'\\\r\n")
 
